@@ -1,0 +1,45 @@
+import type { AuthResponse, RoomDetail, RoomSummary } from '@game-lobby/shared';
+
+const API_URL = import.meta.env.VITE_API_URL ?? '';
+
+async function request<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message ?? '请求失败');
+  return data as T;
+}
+
+export function register(username: string, password: string, displayName?: string) {
+  return request<AuthResponse>('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ username, password, displayName }),
+  });
+}
+
+export function login(username: string, password: string) {
+  return request<AuthResponse>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export function fetchRooms(token: string) {
+  return request<RoomSummary[]>('/api/rooms', {}, token);
+}
+
+export function createRoom(token: string, name: string, maxPlayers = 8) {
+  return request<RoomDetail>('/api/rooms', {
+    method: 'POST',
+    body: JSON.stringify({ name, maxPlayers }),
+  }, token);
+}
+
+export function fetchRoom(token: string, roomId: string) {
+  return request<RoomDetail>(`/api/rooms/${roomId}`, {}, token);
+}

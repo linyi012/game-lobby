@@ -1,0 +1,92 @@
+export type GameType = 'undercover' | 'da_vinci_code';
+
+export type AiDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
+
+export type RoomStatus = 'waiting' | 'playing' | 'finished';
+
+export type PlayerRole = 'host' | 'player' | 'spectator';
+
+export type GameQueueMode = 'ordered' | 'random';
+
+export interface UserProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarColor: string;
+}
+
+export interface RoomPlayer {
+  id: string;
+  userId: string | null;
+  username: string;
+  displayName: string;
+  isBot: boolean;
+  botDifficulty: AiDifficulty | null;
+  role: PlayerRole;
+  isOnline: boolean;
+  isReady: boolean;
+}
+
+export interface GameQueueItem {
+  gameType: GameType;
+  order: number;
+}
+
+export interface RoomSummary {
+  id: string;
+  name: string;
+  hostId: string;
+  status: RoomStatus;
+  currentGame: GameType | null;
+  playerCount: number;
+  spectatorCount: number;
+  maxPlayers: number;
+  players: RoomPlayer[];
+  createdAt: string;
+}
+
+export interface RoomDetail extends RoomSummary {
+  gameQueue: GameQueueItem[];
+  queueMode: GameQueueMode;
+  activePlayerIds: string[];
+  spectatorIds: string[];
+}
+
+export interface AuthResponse {
+  token: string;
+  user: UserProfile;
+}
+
+export interface ApiError {
+  message: string;
+  code?: string;
+}
+
+export const GAME_META: Record<
+  GameType,
+  { name: string; minPlayers: number; maxPlayers: number; description: string }
+> = {
+  undercover: {
+    name: '谁是卧底',
+    minPlayers: 4,
+    maxPlayers: 12,
+    description: '平民与卧底轮流描述词语，投票找出卧底。',
+  },
+  da_vinci_code: {
+    name: '达芬奇密码',
+    minPlayers: 2,
+    maxPlayers: 4,
+    description: '推理对手数字牌序列，率先清空手牌者获胜。',
+  },
+};
+
+export const AI_DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
+  easy: '简单',
+  medium: '普通',
+  hard: '困难',
+  expert: '专家',
+};
+
+export const ALL_GAME_TYPES: GameType[] = ['undercover', 'da_vinci_code'];
+
+export const ALL_AI_DIFFICULTIES: AiDifficulty[] = ['easy', 'medium', 'hard', 'expert'];
