@@ -6,11 +6,8 @@ import type { DaVinciGameState, DaVinciTile } from '../../types/game';
 
 type EndState = 'none' | 'winner' | 'loser';
 
-// The whole tile face (background + number) is baked onto a single high-res
-// canvas texture. Rendering it as an OPAQUE sticker (no transparency, with a
-// polygon offset) avoids the transparency depth-sorting that made freshly added
-// tiles flicker as the camera micro-moved, while staying crisp at any zoom.
 const faceTextureCache = new Map<string, THREE.CanvasTexture>();
+const decalTextureCache = new Map<string, THREE.CanvasTexture>();
 
 function getFaceTexture(label: string, bg: string, text: string): THREE.CanvasTexture {
   const key = `${label}|${bg}|${text}`;
@@ -24,7 +21,6 @@ function getFaceTexture(label: string, bg: string, text: string): THREE.CanvasTe
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, size, size);
 
-  // Background fills the face so the sticker is fully opaque.
   ctx.fillStyle = bg;
   roundedRect(ctx, 6, 6, size - 12, size - 12, 28);
   ctx.fill();
@@ -44,6 +40,40 @@ function getFaceTexture(label: string, bg: string, text: string): THREE.CanvasTe
   return texture;
 }
 
+/** Flat table decal — text printed on the felt beside props. */
+function getDecalTexture(text: string, w = 512, h = 160): THREE.CanvasTexture {
+  const key = `decal|${text}|${w}|${h}`;
+  const cached = decalTextureCache.get(key);
+  if (cached) return cached;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, w, h);
+
+  roundedRect(ctx, 8, 8, w - 16, h - 16, 22);
+  ctx.fillStyle = 'rgba(12, 22, 38, 0.72)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.92)';
+  ctx.font = "600 72px 'Segoe UI', system-ui, sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, w / 2, h / 2 + 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.anisotropy = 8;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  decalTextureCache.set(key, texture);
+  return texture;
+}
+
 interface Props {
   state: DaVinciGameState;
   myMemberId: string | null;
@@ -56,8 +86,14 @@ const TILE_W = 0.66;
 const TILE_H = 0.98;
 const TILE_D = 0.15;
 const GAP = 0.14;
-const ROW_GAP = 2.05;
 const ROW_TILT = -0.32;
+const CIRCLE_RADIUS = 4.1;
+const TWO_PLAYER_HALF_GAP = 2.35;
+/** Lift seats/deck above the felt so the center stays visible in 2-player. */
+const PLAYFIELD_LIFT_2P = 0.62;
+const PLAYFIELD_LIFT_MP = 0.28;
+/** Keep drei Html below the React victory overlay (default Html z-index is ~1.6e7). */
+const HTML_Z: [number, number] = [3, 0];
 
 function tileFaces(tile: DaVinciTile) {
   if (tile.color === 'white') {
@@ -81,6 +117,20 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   ctx.closePath();
 }
 
+/** Seat position & yaw: local player at front (+Z), racks face outward from center. */
+function seatLayout(playerCount: number, seatIndex: number): { x: number; z: number; rotateY: number } {
+  if (playerCount === 2) {
+    const z = seatIndex === 0 ? TWO_PLAYER_HALF_GAP : -TWO_PLAYER_HALF_GAP;
+    return { x: 0, z, rotateY: seatIndex === 0 ? 0 : Math.PI };
+  }
+  const angle = (2 * Math.PI * seatIndex) / playerCount;
+  return {
+    x: CIRCLE_RADIUS * Math.sin(angle),
+    z: CIRCLE_RADIUS * Math.cos(angle),
+    rotateY: angle,
+  };
+}
+
 interface Tile3DProps {
   tile: DaVinciTile;
   x: number;
@@ -88,44 +138,51 @@ interface Tile3DProps {
   selected: boolean;
   onClick: () => void;
   endState: EndState;
+  flat?: boolean;
 }
 
-function Tile3D({ tile, x, selectable, selected, onClick, endState }: Tile3DProps) {
+function Tile3D({ tile, x, selectable, selected, onClick, endState, flat = false }: Tile3DProps) {
   const [hovered, setHovered] = useState(false);
   const groupRef = useRef<THREE.Group>(null);
   const seed = useMemo(() => Math.random() * Math.PI * 2, []);
   const faces = tileFaces(tile);
   const label = tileLabel(tile);
-  const lift = selected ? 0.4 : hovered && selectable ? 0.22 : 0;
   const frameColor = selected ? '#5b8def' : tile.revealed ? '#fbbf24' : null;
   const faceTexture = useMemo(() => getFaceTexture(label, faces.body, faces.text), [label, faces.body, faces.text]);
 
   const isWinner = endState === 'winner';
   const isLoser = endState === 'loser';
+  const isRevealed = tile.revealed || flat;
+  const highlight = selected || (hovered && selectable && !isRevealed);
+
+  const flatRotX = -Math.PI / 2;
+  const flatY = TILE_D / 2 + 0.02;
 
   useFrame((st, dt) => {
     const g = groupRef.current;
     if (!g) return;
     const clamped = Math.min(dt, 0.05);
+    if (flat) return;
     if (isWinner) {
-      // Bob up and gently sway, keeping the number facing the camera.
       const t = st.clock.elapsedTime;
       g.position.y = TILE_H / 2 + 0.28 + Math.sin(t * 3 + x * 2.2 + seed) * 0.16;
       g.rotation.z = Math.sin(t * 2 + seed) * 0.12;
       g.rotation.x = 0;
     } else if (isLoser) {
-      // Topple backward and settle flat on the table.
       g.rotation.x = THREE.MathUtils.damp(g.rotation.x, -1.4, 4, clamped);
       g.rotation.z = THREE.MathUtils.damp(g.rotation.z, 0, 4, clamped);
       g.position.y = THREE.MathUtils.damp(g.position.y, 0.18, 4, clamped);
     }
   });
 
+  const baseY = flat ? flatY : TILE_H / 2 + (selected ? 0.12 : 0);
+  const baseRotX = flat ? flatRotX : 0;
+
   return (
-    <group ref={groupRef} position={[x, TILE_H / 2 + lift, 0]}>
+    <group ref={groupRef} position={[x, baseY, 0]} rotation={[baseRotX, 0, 0]}>
       {frameColor && (
         <RoundedBox args={[TILE_W + 0.12, TILE_H + 0.12, TILE_D + 0.02]} radius={0.08} smoothness={3} position={[0, 0, -0.01]}>
-          <meshStandardMaterial color={frameColor} emissive={frameColor} emissiveIntensity={0.6} roughness={0.4} />
+          <meshStandardMaterial color={frameColor} emissive={frameColor} emissiveIntensity={highlight ? 0.55 : 0.4} roughness={0.4} />
         </RoundedBox>
       )}
       <RoundedBox
@@ -134,12 +191,12 @@ function Tile3D({ tile, x, selectable, selected, onClick, endState }: Tile3DProp
         smoothness={4}
         castShadow
         onClick={(e) => {
-          if (!selectable) return;
+          if (!selectable || isRevealed) return;
           e.stopPropagation();
           onClick();
         }}
         onPointerOver={(e) => {
-          if (!selectable) return;
+          if (!selectable || isRevealed) return;
           e.stopPropagation();
           setHovered(true);
           document.body.style.cursor = 'pointer';
@@ -151,8 +208,8 @@ function Tile3D({ tile, x, selectable, selected, onClick, endState }: Tile3DProp
       >
         <meshStandardMaterial
           color={faces.body}
-          emissive={isWinner ? '#f59e0b' : '#000000'}
-          emissiveIntensity={isWinner ? 0.5 : 0}
+          emissive={isWinner ? '#f59e0b' : highlight ? '#3b82f6' : '#000000'}
+          emissiveIntensity={isWinner ? 0.5 : highlight ? 0.12 : 0}
           metalness={0.15}
           roughness={0.55}
         />
@@ -172,8 +229,92 @@ function Tile3D({ tile, x, selectable, selected, onClick, endState }: Tile3DProp
   );
 }
 
-interface RackProps {
+function FlatTileMarker({
+  x,
+  z,
+  y,
+  label,
+  bg,
+  text,
+}: {
+  x: number;
   z: number;
+  y: number;
+  label: string;
+  bg: string;
+  text: string;
+}) {
+  const faceTexture = useMemo(() => getFaceTexture(label, bg, text), [label, bg, text]);
+  const mw = TILE_W * 0.34;
+  const mh = TILE_H * 0.34;
+  return (
+    <group position={[x, y, z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+        <planeGeometry args={[mw, mh]} />
+        <meshStandardMaterial
+          map={faceTexture}
+          roughness={0.75}
+          metalness={0.05}
+          polygonOffset
+          polygonOffsetFactor={-1}
+          polygonOffsetUnits={-1}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+function OrderMarkers({ platformW }: { platformW: number }) {
+  // Fixed strip on the inner platform edge — never wider than the seat block.
+  const innerZ = -0.4;
+  const markerY = 0.084;
+  const span = Math.min(platformW - 0.28, 0.88);
+  const half = span / 2;
+  const arrowTexture = useMemo(() => getDecalTexture('→', 128, 64), []);
+
+  return (
+    <>
+      <FlatTileMarker x={-half} z={innerZ} y={markerY} label="0" bg="#171f2c" text="#f1f5f9" />
+      <FlatTileMarker x={half} z={innerZ} y={markerY} label="11" bg="#e9edf4" text="#0f172a" />
+      <mesh position={[0, markerY, innerZ]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+        <planeGeometry args={[span * 0.42, 0.12]} />
+        <meshStandardMaterial
+          map={arrowTexture}
+          transparent
+          opacity={0.55}
+          roughness={0.9}
+          polygonOffset
+          polygonOffsetFactor={-1}
+          polygonOffsetUnits={-1}
+        />
+      </mesh>
+    </>
+  );
+}
+
+function DrawnTileAbove({ tile }: { tile: DaVinciTile }) {
+  const faces = tileFaces(tile);
+  const label = tileLabel(tile);
+  const faceTexture = useMemo(() => getFaceTexture(label, faces.body, faces.text), [label, faces.body, faces.text]);
+  return (
+    <group position={[0, 2.15, 0.15]} rotation={[-0.15, 0, 0]}>
+      <RoundedBox args={[TILE_W, TILE_H, TILE_D]} radius={0.07} smoothness={4}>
+        <meshStandardMaterial color={faces.body} emissive="#3b82f6" emissiveIntensity={0.1} metalness={0.15} roughness={0.55} />
+      </RoundedBox>
+      <mesh position={[0, 0, TILE_D / 2 + 0.004]} raycast={() => null}>
+        <planeGeometry args={[TILE_W * 0.96, TILE_H * 0.96]} />
+        <meshStandardMaterial map={faceTexture} roughness={0.6} metalness={0.1} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
+      </mesh>
+      <Html center zIndexRange={HTML_Z} position={[0, TILE_H / 2 + 0.22, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(147,197,253,0.85)', whiteSpace: 'nowrap' }}>本回合抽牌</div>
+      </Html>
+    </group>
+  );
+}
+
+interface RackProps {
+  seatX: number;
+  seatZ: number;
   rotateY: number;
   player: DaVinciGameState['players'][number];
   isCurrent: boolean;
@@ -183,11 +324,26 @@ interface RackProps {
   label: string;
   endState: EndState;
   hideTiles?: boolean;
+  drawnTile?: DaVinciTile | null;
 }
 
-function Rack({ z, rotateY, player, isCurrent, selectable, selectedIndex, onSelectTile, label, endState, hideTiles }: RackProps) {
+function Rack({
+  seatX,
+  seatZ,
+  rotateY,
+  player,
+  isCurrent,
+  selectable,
+  selectedIndex,
+  onSelectTile,
+  label,
+  endState,
+  hideTiles,
+  drawnTile,
+}: RackProps) {
   const count = player.rack.length;
   const totalW = count > 0 ? count * (TILE_W + GAP) - GAP : 0;
+  const platformW = Math.max(totalW + 0.6, 1.2);
   const isWinner = endState === 'winner';
   const isLoser = endState === 'loser';
 
@@ -201,14 +357,13 @@ function Rack({ z, rotateY, player, isCurrent, selectable, selectedIndex, onSele
   } else if (isCurrent) {
     platformColor = '#1e3a5f';
     platformEmissive = '#2563eb';
-    platformGlow = 0.35;
+    platformGlow = 0.28;
   }
 
   return (
-    <group position={[0, 0, z]} rotation={[0, rotateY, 0]}>
-      {/* seat platform */}
+    <group position={[seatX, 0, seatZ]} rotation={[0, rotateY, 0]}>
       <RoundedBox
-        args={[Math.max(totalW + 0.6, 1.2), 0.12, 1.5]}
+        args={[platformW, 0.12, 1.5]}
         radius={0.06}
         smoothness={3}
         position={[0, 0.02, 0]}
@@ -220,33 +375,55 @@ function Rack({ z, rotateY, player, isCurrent, selectable, selectedIndex, onSele
       {isWinner && <pointLight position={[0, 2.4, 0.6]} intensity={6} distance={6} color="#fbbf24" />}
 
       {!hideTiles && (
-        <group rotation={[ROW_TILT, 0, 0]} position={[0, 0.12, 0.1]}>
-          {player.rack.map((tile, i) => {
-            const x = -totalW / 2 + i * (TILE_W + GAP) + TILE_W / 2;
-            return (
-              <Tile3D
-                key={i}
-                tile={tile}
-                x={x}
-                selectable={selectable && !tile.revealed}
-                selected={selectedIndex === i}
-                onClick={() => onSelectTile(i)}
-                endState={endState}
-              />
-            );
-          })}
-        </group>
+        <>
+          <OrderMarkers platformW={platformW} />
+          <group rotation={[ROW_TILT, 0, 0]} position={[0, 0.12, 0.1]}>
+            {player.rack.map((tile, i) => {
+              if (tile.revealed) return null;
+              const x = -totalW / 2 + i * (TILE_W + GAP) + TILE_W / 2;
+              return (
+                <Tile3D
+                  key={`${player.id}-${i}`}
+                  tile={tile}
+                  x={x}
+                  selectable={selectable}
+                  selected={selectedIndex === i}
+                  onClick={() => onSelectTile(i)}
+                  endState={endState}
+                />
+              );
+            })}
+          </group>
+          <group position={[0, 0.085, 0.02]}>
+            {player.rack.map((tile, i) => {
+              if (!tile.revealed) return null;
+              const x = -totalW / 2 + i * (TILE_W + GAP) + TILE_W / 2;
+              return (
+                <Tile3D
+                  key={`${player.id}-${i}-flat`}
+                  tile={tile}
+                  x={x}
+                  selectable={false}
+                  selected={false}
+                  onClick={() => {}}
+                  endState={endState}
+                  flat
+                />
+              );
+            })}
+          </group>
+        </>
       )}
 
+      {drawnTile && <DrawnTileAbove tile={drawnTile} />}
+
       {isWinner && (
-        <Html center position={[0, 2.5, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-          <div style={{ fontSize: '40px', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))', animation: 'dv-bob 1.4s ease-in-out infinite' }}>
-            👑
-          </div>
+        <Html center zIndexRange={HTML_Z} position={[0, 2.5, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+          <div style={{ fontSize: '40px', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))' }}>👑</div>
         </Html>
       )}
 
-      <Html center position={[0, 1.7, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <Html center zIndexRange={HTML_Z} position={[0, 1.7, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
         <div
           style={{
             whiteSpace: 'nowrap',
@@ -271,6 +448,50 @@ function Rack({ z, rotateY, player, isCurrent, selectable, selectedIndex, onSele
           {label}
         </div>
       </Html>
+    </group>
+  );
+}
+
+function DeckPile({ count, twoPlayer }: { count: number; twoPlayer: boolean }) {
+  const layers = useMemo(() => Math.min(Math.max(count, 1), 14), [count]);
+  const seed = useMemo(() => Math.random(), []);
+  const labelTexture = useMemo(() => getDecalTexture(`牌堆 ${count}`), [count]);
+
+  // Flat on the playfield surface (group is already lifted above the felt).
+  const labelPos: [number, number, number] = twoPlayer
+    ? [0, 0.006, 0.55]
+    : [TILE_W * 0.48 + 0.2, 0.006, TILE_H * 0.22];
+
+  return (
+    <group position={[0, 0.08, 0]}>
+      {Array.from({ length: layers }, (_, i) => (
+        <RoundedBox
+          key={i}
+          args={[TILE_W * 0.92, 0.045, TILE_H * 0.92]}
+          radius={0.04}
+          smoothness={2}
+          position={[
+            Math.sin(seed + i * 1.7) * 0.012,
+            i * 0.048 + 0.024,
+            Math.cos(seed + i * 2.3) * 0.012,
+          ]}
+          rotation={[0, (seed + i) * 0.04, 0]}
+        >
+          <meshStandardMaterial color="#1a2740" emissive="#0f172a" emissiveIntensity={0.15} roughness={0.9} metalness={0.05} />
+        </RoundedBox>
+      ))}
+      <mesh position={labelPos} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+        <planeGeometry args={[1.05, 0.32]} />
+        <meshStandardMaterial
+          map={labelTexture}
+          transparent
+          roughness={0.92}
+          metalness={0}
+          polygonOffset
+          polygonOffsetFactor={-2}
+          polygonOffsetUnits={-2}
+        />
+      </mesh>
     </group>
   );
 }
@@ -335,25 +556,7 @@ function Confetti() {
   );
 }
 
-function DrawnTile({ tile }: { tile: DaVinciTile }) {
-  const faces = tileFaces(tile);
-  const label = tileLabel(tile);
-  const faceTexture = useMemo(() => getFaceTexture(label, faces.body, faces.text), [label, faces.body, faces.text]);
-  return (
-    <group position={[0, 2.6, 1.2]} rotation={[-0.2, 0, 0]}>
-      <RoundedBox args={[TILE_W, TILE_H, TILE_D]} radius={0.07} smoothness={4}>
-        <meshStandardMaterial color={faces.body} emissive="#5b8def" emissiveIntensity={0.18} metalness={0.2} roughness={0.5} />
-      </RoundedBox>
-      <mesh position={[0, 0, TILE_D / 2 + 0.004]} raycast={() => null}>
-        <planeGeometry args={[TILE_W * 0.96, TILE_H * 0.96]} />
-        <meshStandardMaterial map={faceTexture} roughness={0.6} metalness={0.1} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
-      </mesh>
-    </group>
-  );
-}
-
 function Scene({ state, myMemberId, isMyTurn, selected, onSelectTile }: Props) {
-  // Local player rendered at the front (nearest the camera), others behind.
   const ordered = useMemo(() => {
     const players = state.players;
     const meIdx = players.findIndex((p) => p.id === myMemberId);
@@ -369,6 +572,10 @@ function Scene({ state, myMemberId, isMyTurn, selected, onSelectTile }: Props) {
   const hasWinner = ended && state.winnerId != null;
   const setupReady = state.setupReady.length;
   const setupTotal = state.players.length;
+  const showDeck = !inSetup && state.deckCount > 0;
+
+  const tableSize = n <= 2 ? 10 : CIRCLE_RADIUS * 2 + 3;
+  const playfieldLift = n === 2 ? PLAYFIELD_LIFT_2P : PLAYFIELD_LIFT_MP;
 
   return (
     <>
@@ -376,22 +583,31 @@ function Scene({ state, myMemberId, isMyTurn, selected, onSelectTile }: Props) {
       <directionalLight position={[6, 12, 8]} intensity={1.1} castShadow shadow-mapSize={[1024, 1024]} />
       <directionalLight position={[-6, 6, -4]} intensity={0.4} color="#9bbcff" />
 
-      {/* table */}
+      {/* Table felt — stays low; all play pieces sit in the lifted group above. */}
       <mesh position={[0, -0.1, 0]} receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[40, 40]} />
         <meshStandardMaterial color="#0c1422" roughness={0.95} />
       </mesh>
-      <RoundedBox args={[14, 0.2, n * ROW_GAP + 3]} radius={0.2} smoothness={4} position={[0, -0.02, 0]} receiveShadow>
-        <meshStandardMaterial color="#13324a" roughness={0.85} />
-      </RoundedBox>
 
-      {ordered.map(({ player }, rowIdx) => {
-        const z = ((n - 1) / 2 - rowIdx) * ROW_GAP;
+      {n >= 3 ? (
+        <mesh position={[0, -0.02, 0]} receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[tableSize / 2, 48]} />
+          <meshStandardMaterial color="#13324a" roughness={0.85} />
+        </mesh>
+      ) : (
+        <RoundedBox args={[6, 0.2, tableSize]} radius={0.2} smoothness={4} position={[0, -0.02, 0]} receiveShadow>
+          <meshStandardMaterial color="#13324a" roughness={0.85} />
+        </RoundedBox>
+      )}
+
+      <group position={[0, playfieldLift, 0]}>
+      {showDeck && <DeckPile count={state.deckCount} twoPlayer={n === 2} />}
+
+      {ordered.map(({ player }, seatIdx) => {
+        const { x, z, rotateY } = seatLayout(n, seatIdx);
         const isMe = player.id === myMemberId;
-        // Back rows face the camera too; flip nothing — labels via Html always face camera.
         const isCurrent = state.phase === 'playing' && player.id === current?.id;
-        const selectedIndex =
-          selected && selected.targetId === player.id ? selected.tileIndex : null;
+        const selectedIndex = selected && selected.targetId === player.id ? selected.tileIndex : null;
         const canSelectRack = isMyTurn && state.stage === 'guessing' && !isMe && !player.eliminated;
         const endState: EndState = !ended
           ? 'none'
@@ -407,8 +623,9 @@ function Scene({ state, myMemberId, isMyTurn, selected, onSelectTile }: Props) {
         return (
           <Rack
             key={player.id}
-            z={z}
-            rotateY={0}
+            seatX={x}
+            seatZ={z}
+            rotateY={rotateY}
             player={player}
             isCurrent={isCurrent}
             selectable={canSelectRack}
@@ -417,12 +634,13 @@ function Scene({ state, myMemberId, isMyTurn, selected, onSelectTile }: Props) {
             label={label}
             endState={endState}
             hideTiles={inSetup}
+            drawnTile={isCurrent && !ended && !inSetup ? state.drawnTile : null}
           />
         );
       })}
 
       {inSetup && (
-        <Html center position={[0, 1.35, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+        <Html center zIndexRange={HTML_Z} position={[0, 1.35, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
           <div
             style={{
               textAlign: 'center',
@@ -449,16 +667,19 @@ function Scene({ state, myMemberId, isMyTurn, selected, onSelectTile }: Props) {
         </Html>
       )}
 
-      {state.drawnTile && !ended && !inSetup && <DrawnTile tile={state.drawnTile} />}
       {hasWinner && <Confetti />}
+      </group>
 
       <OrbitControls
         enablePan={false}
-        minDistance={6}
-        maxDistance={16}
-        minPolarAngle={0.2}
-        maxPolarAngle={Math.PI / 2.2}
-        target={[0, 0.5, 0]}
+        enableDamping
+        dampingFactor={0.08}
+        minDistance={7}
+        maxDistance={15}
+        minPolarAngle={0.35}
+        maxPolarAngle={Math.PI / 2.15}
+        target={[0, 0.35 + playfieldLift * 0.45, 0]}
+        rotateSpeed={0.55}
       />
     </>
   );
@@ -472,10 +693,11 @@ export function DaVinciBoard3D(props: Props) {
         inset: 0,
         width: '100%',
         height: '100%',
+        zIndex: 1,
         background: 'radial-gradient(ellipse at top, #16243f 0%, #0a0f18 70%)',
       }}
     >
-      <Canvas shadows camera={{ position: [0, 6.5, 9], fov: 42 }} dpr={[1, 2]}>
+      <Canvas shadows camera={{ position: [0, 7, 10], fov: 40 }} dpr={[1, 2]} gl={{ antialias: true, powerPreference: 'high-performance' }}>
         <Scene {...props} />
       </Canvas>
     </div>

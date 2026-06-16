@@ -1,4 +1,11 @@
 import { Suspense, lazy, useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  playDrawSound,
+  playGuessCorrect,
+  playGuessWrong,
+  playPlaceJoker,
+  playTurnSound,
+} from '../../lib/game-sounds';
 import { JOKER_VALUE } from '../../types/game';
 import type { DaVinciColor, DaVinciGameState, DaVinciTile } from '../../types/game';
 import type { DaVinciLastAction } from '../../types/game';
@@ -150,6 +157,52 @@ export function DaVinciGame({
     if (!isMyTurn || state.stage !== 'guessing') setSelected(null);
   }, [isMyTurn, state.stage, state.currentPlayerIndex]);
 
+  // Game sound effects — keyed off server state transitions.
+  const actionSigRef = useRef<string | null>(null);
+  useEffect(() => {
+    const la = state.lastAction;
+    if (!la || state.phase !== 'playing') return;
+    const sig = `${la.guesserId}|${la.targetId}|${la.position}|${la.guessedValue}|${la.correct}`;
+    if (sig === actionSigRef.current) return;
+    actionSigRef.current = sig;
+    if (la.correct) playGuessCorrect();
+    else playGuessWrong();
+  }, [state.lastAction, state.phase]);
+
+  const hadDrawnRef = useRef(false);
+  useEffect(() => {
+    const hasDrawn = state.phase === 'playing' && state.drawnTile != null;
+    if (hasDrawn && !hadDrawnRef.current) playDrawSound();
+    hadDrawnRef.current = hasDrawn;
+    if (state.phase !== 'playing') hadDrawnRef.current = false;
+  }, [state.drawnTile, state.phase]);
+
+  const prevStageRef = useRef(state.stage);
+  useEffect(() => {
+    if (state.phase !== 'playing') {
+      prevStageRef.current = state.stage;
+      return;
+    }
+    if (prevStageRef.current !== 'placing' && state.stage === 'placing') playPlaceJoker();
+    prevStageRef.current = state.stage;
+  }, [state.stage, state.phase]);
+
+  const prevTurnRef = useRef(state.currentPlayerIndex);
+  useEffect(() => {
+    if (state.phase !== 'playing') {
+      prevTurnRef.current = state.currentPlayerIndex;
+      return;
+    }
+    if (
+      prevTurnRef.current !== state.currentPlayerIndex &&
+      state.stage === 'guessing' &&
+      state.drawnTile == null
+    ) {
+      playTurnSound();
+    }
+    prevTurnRef.current = state.currentPlayerIndex;
+  }, [state.currentPlayerIndex, state.stage, state.drawnTile, state.phase]);
+
   const candidates =
     selected && isMyTurn
       ? computeCandidates(state, myMemberId, selected.targetId, selected.tileIndex)
@@ -240,7 +293,7 @@ export function DaVinciGame({
       </Suspense>
 
       {/* Overlay layer: panels capture clicks, the gaps fall through to the canvas. */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2 }}>
         {/* Top-left: title, status & deck info */}
         <div
           style={{
@@ -335,6 +388,9 @@ export function DaVinciGame({
               <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
                 在下方面板安排起始牌（数字顺序固定，Joker 可移动）。确认后等待全员完成，牌才会一起上桌。
               </p>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', opacity: 0.85 }}>
+                黑 0 → 白 11（从左到右递增）
+              </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', alignItems: 'flex-end' }}>
                 {setupRack.map((t, i) => (
                   <div key={i} style={{ display: 'grid', gap: 2, justifyItems: 'center' }}>
@@ -469,36 +525,49 @@ export function DaVinciGame({
 
         {/* Center: animated end-of-game banner */}
         {ended && (
-          <div
-            key={state.winnerId ?? 'end'}
-            style={{
-              position: 'absolute',
-              left: '50%',
-              top: '42%',
-              transform: 'translate(-50%, -50%)',
-              pointerEvents: 'none',
-              textAlign: 'center',
-              padding: '1.1rem 1.8rem',
-              borderRadius: 16,
-              background: iWon
-                ? 'linear-gradient(160deg, rgba(245,158,11,0.95), rgba(217,119,6,0.95))'
-                : 'rgba(12, 18, 30, 0.85)',
-              border: iWon ? '1px solid #fde047' : '1px solid rgba(255,255,255,0.12)',
-              color: iWon ? '#1a1206' : 'var(--text)',
-              backdropFilter: 'blur(8px)',
-              animation: 'dv-banner-pop 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both, dv-banner-glow 2.2s ease-in-out 0.5s infinite',
-            }}
-          >
-            <div style={{ fontSize: '2.2rem', lineHeight: 1, marginBottom: '0.3rem' }}>
-              {iWon ? '🎉' : '🏆'}
+          <>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 40,
+                background: 'rgba(0, 0, 0, 0.42)',
+                pointerEvents: 'none',
+              }}
+            />
+            <div
+              key={state.winnerId ?? 'end'}
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '36%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 50,
+                pointerEvents: 'none',
+                textAlign: 'center',
+                padding: '1.1rem 1.8rem',
+                borderRadius: 16,
+                background: iWon
+                  ? 'linear-gradient(160deg, rgba(245,158,11,0.95), rgba(217,119,6,0.95))'
+                  : 'rgba(12, 18, 30, 0.92)',
+                border: iWon ? '1px solid #fde047' : '1px solid rgba(255,255,255,0.12)',
+                color: iWon ? '#1a1206' : 'var(--text)',
+                backdropFilter: 'blur(8px)',
+                boxShadow: '0 12px 40px rgba(0,0,0,0.55)',
+                animation: 'dv-banner-pop 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both, dv-banner-glow 2.2s ease-in-out 0.5s infinite',
+              }}
+            >
+              <div style={{ fontSize: '2.2rem', lineHeight: 1, marginBottom: '0.3rem' }}>
+                {iWon ? '🎉' : '🏆'}
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>
+                {iWon ? '胜利！' : winner ? `${winner.name} 获胜` : '游戏结束'}
+              </div>
+              <div style={{ marginTop: '0.35rem', fontSize: '0.9rem', opacity: 0.85 }}>
+                {iWon ? '你赢得了本局' : state.message}
+              </div>
             </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>
-              {iWon ? '胜利！' : winner ? `${winner.name} 获胜` : '游戏结束'}
-            </div>
-            <div style={{ marginTop: '0.35rem', fontSize: '0.9rem', opacity: 0.85 }}>
-              {iWon ? '你赢得了本局' : state.message}
-            </div>
-          </div>
+          </>
         )}
       </div>
     </div>
