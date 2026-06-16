@@ -24,8 +24,12 @@ import {
   generateBotVote,
   guessDaVinciTile,
   decideDaVinciContinue,
+  placeDaVinciJoker,
+  submitDaVinciSetup,
   generateBotDaVinciMove,
   generateBotDaVinciDecision,
+  generateBotDaVinciPlacement,
+  type GameOptions,
   type GameState,
   type UndercoverGameState,
   type DaVinciGameState,
@@ -38,6 +42,8 @@ interface InMemoryGame {
   activePlayerIds: string[];
 }
 
+export type RoomCloseReason = 'empty' | 'idle' | 'stale';
+
 export class RoomManager {
   private games = new Map<string, InMemoryGame>();
   private socketToMember = new Map<string, { roomId: string; memberId: string }>();
@@ -47,13 +53,95 @@ export class RoomManager {
   // Empty rooms are closed after a grace period so brief disconnects / page
   // refreshes (incl. React StrictMode double-mount) don't destroy the room.
   private pendingClose = new Map<string, NodeJS.Timeout>();
-  private onRoomClosed?: (roomId: string) => void;
+  // Last time anything meaningful happened in a room (join/leave, settings
+  // change, or a game move). Drives the idle-room and stale-game timeouts.
+  private roomActivity = new Map<string, number>();
+  private sweeper?: NodeJS.Timeout;
+  private onRoomClosed?: (roomId: string, reason: RoomCloseReason) => void;
   private static readonly EMPTY_ROOM_GRACE_MS = 30_000;
+  // A room that never starts a game is closed after this long without activity.
+  private static readonly IDLE_ROOM_TIMEOUT_MS =
+    Number(process.env.IDLE_ROOM_TIMEOUT_MS) || 15 * 60_000;
+  // A running game that makes no progress (e.g. waiting on a player who left)
+  // is closed after this long without activity.
+  private static readonly STALE_GAME_TIMEOUT_MS =
+    Number(process.env.STALE_GAME_TIMEOUT_MS) || 5 * 60_000;
+  private static readonly SWEEP_INTERVAL_MS = 30_000;
 
   constructor(private db: Database) {}
 
-  setRoomClosedListener(cb: (roomId: string) => void) {
+  setRoomClosedListener(cb: (roomId: string, reason: RoomCloseReason) => void) {
     this.onRoomClosed = cb;
+  }
+
+  // Starts the periodic timeout sweeper. Returns a function that stops it.
+  startSweeper(): () => void {
+    if (!this.sweeper) {
+      this.sweeper = setInterval(() => {
+        void this.sweepTimeouts();
+      }, RoomManager.SWEEP_INTERVAL_MS);
+      if (typeof this.sweeper.unref === 'function') this.sweeper.unref();
+    }
+    return () => this.stopSweeper();
+  }
+
+  stopSweeper() {
+    if (this.sweeper) {
+      clearInterval(this.sweeper);
+      this.sweeper = undefined;
+    }
+  }
+
+  private touchRoom(roomId: string) {
+    this.roomActivity.set(roomId, Date.now());
+  }
+
+  private isGameEnded(game: InMemoryGame): boolean {
+    return (game.state as { phase?: string }).phase === 'ended';
+  }
+
+  // Returns whether a room has exceeded its timeout, and which kind. A room
+  // with an active (not-yet-ended) game uses the stale-game timeout; any other
+  // room (waiting, or holding a finished game) uses the idle-room timeout.
+  private getTimeoutStatus(room: typeof rooms.$inferSelect): {
+    timedOut: boolean;
+    reason: Exclude<RoomCloseReason, 'empty'>;
+  } {
+    const game = this.games.get(room.id);
+    const hasActiveGame = room.status === 'playing' && !!game && !this.isGameEnded(game);
+    const reason = hasActiveGame ? 'stale' : 'idle';
+    const limit = hasActiveGame
+      ? RoomManager.STALE_GAME_TIMEOUT_MS
+      : RoomManager.IDLE_ROOM_TIMEOUT_MS;
+    const last = this.roomActivity.get(room.id) ?? room.createdAt.getTime();
+    return { timedOut: Date.now() - last >= limit, reason };
+  }
+
+  private async sweepTimeouts() {
+    const allRooms = await this.db.select().from(rooms);
+    for (const room of allRooms) {
+      if (this.getTimeoutStatus(room).timedOut) {
+        await this.finalizeTimeoutClose(room.id);
+      }
+    }
+  }
+
+  private async finalizeTimeoutClose(roomId: string) {
+    await this.runExclusive(`room:${roomId}`, async () => {
+      const [room] = await this.db.select().from(rooms).where(eq(rooms.id, roomId));
+      if (!room) return;
+
+      // Re-check under the lock so we don't close a room that just saw activity.
+      const { timedOut, reason } = this.getTimeoutStatus(room);
+      if (!timedOut) return;
+
+      this.cancelScheduledClose(roomId);
+      await this.db.delete(rooms).where(eq(rooms.id, roomId));
+      this.games.delete(roomId);
+      this.roomActivity.delete(roomId);
+      this.forgetRoomSockets(roomId);
+      this.onRoomClosed?.(roomId, reason);
+    });
   }
 
   private runExclusive<T>(key: string, task: () => Promise<T>): Promise<T> {
@@ -117,6 +205,7 @@ export class RoomManager {
     }));
     await this.db.insert(roomGameQueue).values(queueItems);
 
+    this.touchRoom(room!.id);
     const members = [this.mapMember(hostMember!)];
     return this.toDetail(room!, members, queueItems.map((q, i) => ({ gameType: q.gameType as GameType, order: i })));
   }
@@ -154,6 +243,7 @@ export class RoomManager {
 
       // Someone is (re)joining, so cancel any pending auto-close for this room.
       this.cancelScheduledClose(roomId);
+      this.touchRoom(roomId);
 
       // A player may only be in one room at a time: remove them from any others.
       const { leftRooms, kickedSockets } = await this.removeUserFromOtherRooms(user.id, roomId);
@@ -207,6 +297,7 @@ export class RoomManager {
         .set({ isOnline: false })
         .where(eq(roomMembers.id, mapping.memberId));
 
+      this.touchRoom(mapping.roomId);
       const deleted = await this.cleanupRoom(mapping.roomId);
       return { roomId: mapping.roomId, deleted };
     });
@@ -220,6 +311,7 @@ export class RoomManager {
     this.cancelScheduledClose(roomId);
     await this.db.delete(rooms).where(eq(rooms.id, roomId));
     this.games.delete(roomId);
+    this.roomActivity.delete(roomId);
     this.forgetRoomSockets(roomId);
     return true;
   }
@@ -326,8 +418,9 @@ export class RoomManager {
 
       await this.db.delete(rooms).where(eq(rooms.id, roomId));
       this.games.delete(roomId);
+      this.roomActivity.delete(roomId);
       this.forgetRoomSockets(roomId);
-      this.onRoomClosed?.(roomId);
+      this.onRoomClosed?.(roomId, 'empty');
     });
   }
 
@@ -359,6 +452,7 @@ export class RoomManager {
       isReady: true,
     });
 
+    this.touchRoom(roomId);
     return this.getRoomDetail(roomId);
   }
 
@@ -393,6 +487,7 @@ export class RoomManager {
     }
 
     await this.db.update(rooms).set({ queueMode: mode }).where(eq(rooms.id, roomId));
+    this.touchRoom(roomId);
     return this.getRoomDetail(roomId);
   }
 
@@ -419,12 +514,14 @@ export class RoomManager {
       await this.db.update(roomMembers).set({ role }).where(eq(roomMembers.id, m.id));
     }
 
+    this.touchRoom(roomId);
     return this.getRoomDetail(roomId);
   }
 
   async startNextGame(
     roomId: string,
     requesterId: string,
+    options: GameOptions = {},
   ): Promise<
     | { ok: true; detail: RoomDetail; gameState: GameState; gameType: GameType }
     | { ok: false; message: string }
@@ -477,7 +574,7 @@ export class RoomManager {
       isBot: p.isBot,
     }));
 
-    const state = createGame(nextGame, participants);
+    const state = createGame(nextGame, participants, options);
     const sessionId = uuid();
 
     this.games.set(roomId, {
@@ -492,6 +589,7 @@ export class RoomManager {
       .set({ status: 'playing', currentGame: nextGame })
       .where(eq(rooms.id, roomId));
 
+    this.touchRoom(roomId);
     const updated = await this.getRoomDetail(roomId);
     return updated
       ? { ok: true, detail: updated, gameState: state, gameType: nextGame }
@@ -506,6 +604,7 @@ export class RoomManager {
     const game = this.games.get(roomId);
     if (!game || game.gameType !== 'undercover') return null;
     game.state = submitUndercoverDescription(game.state as UndercoverGameState, playerId, description);
+    this.touchRoom(roomId);
     return game;
   }
 
@@ -513,6 +612,7 @@ export class RoomManager {
     const game = this.games.get(roomId);
     if (!game || game.gameType !== 'undercover') return null;
     game.state = submitUndercoverVote(game.state as UndercoverGameState, voterId, targetId);
+    this.touchRoom(roomId);
     if ((game.state as UndercoverGameState).phase === 'ended') {
       await this.db.update(rooms).set({ status: 'waiting' }).where(eq(rooms.id, roomId));
     }
@@ -535,6 +635,7 @@ export class RoomManager {
       tileIndex,
       value,
     );
+    this.touchRoom(roomId);
     if ((game.state as DaVinciGameState).phase === 'ended') {
       await this.db.update(rooms).set({ status: 'waiting' }).where(eq(rooms.id, roomId));
     }
@@ -549,9 +650,33 @@ export class RoomManager {
       playerId,
       shouldContinue,
     );
+    this.touchRoom(roomId);
     if ((game.state as DaVinciGameState).phase === 'ended') {
       await this.db.update(rooms).set({ status: 'waiting' }).where(eq(rooms.id, roomId));
     }
+    return game;
+  }
+
+  async processDaVinciPlace(roomId: string, playerId: string, index: number) {
+    const game = this.games.get(roomId);
+    if (!game || game.gameType !== 'da_vinci_code') return null;
+    game.state = placeDaVinciJoker(game.state as DaVinciGameState, playerId, index);
+    this.touchRoom(roomId);
+    if ((game.state as DaVinciGameState).phase === 'ended') {
+      await this.db.update(rooms).set({ status: 'waiting' }).where(eq(rooms.id, roomId));
+    }
+    return game;
+  }
+
+  async processDaVinciSetup(
+    roomId: string,
+    playerId: string,
+    tiles: { color: 'black' | 'white'; value: number; isJoker: boolean }[],
+  ) {
+    const game = this.games.get(roomId);
+    if (!game || game.gameType !== 'da_vinci_code') return null;
+    game.state = submitDaVinciSetup(game.state as DaVinciGameState, playerId, tiles);
+    this.touchRoom(roomId);
     return game;
   }
 
@@ -561,6 +686,11 @@ export class RoomManager {
 
     const detail = await this.getRoomDetail(roomId);
     if (!detail) return game;
+
+    // A bot move counts as activity; if nothing changes (e.g. it's a human's
+    // turn), we leave the activity timestamp alone so the stale-game timeout
+    // can eventually fire on an absent player.
+    const before = JSON.stringify(game.state);
 
     if (game.gameType === 'undercover') {
       let state = game.state as UndercoverGameState;
@@ -603,6 +733,9 @@ export class RoomManager {
             move.tileIndex,
             move.value,
           );
+        } else if (state.stage === 'placing') {
+          const index = generateBotDaVinciPlacement(state, current.id);
+          game.state = placeDaVinciJoker(state, current.id, index);
         } else {
           const keepGoing = generateBotDaVinciDecision(state, current.id, member.botDifficulty);
           game.state = decideDaVinciContinue(state, current.id, keepGoing);
@@ -613,6 +746,7 @@ export class RoomManager {
       }
     }
 
+    if (JSON.stringify(game.state) !== before) this.touchRoom(roomId);
     return game;
   }
 

@@ -1,5 +1,11 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { JOKER_VALUE } from '../../types/game';
 import type { DaVinciColor, DaVinciGameState, DaVinciTile } from '../../types/game';
+import type { DaVinciLastAction } from '../../types/game';
+
+const DaVinciBoard3D = lazy(() =>
+  import('./DaVinciBoard3D').then((m) => ({ default: m.DaVinciBoard3D })),
+);
 
 interface Props {
   state: DaVinciGameState;
@@ -7,6 +13,13 @@ interface Props {
   isSpectator: boolean;
   onGuess: (targetPlayerId: string, tileIndex: number, value: number) => void;
   onDecision: (shouldContinue: boolean) => void;
+  onPlaceJoker: (index: number) => void;
+  onSubmitSetup: (tiles: { color: DaVinciColor; value: number; isJoker: boolean }[]) => void;
+}
+
+function tileText(tile: DaVinciTile): string {
+  if (tile.isJoker) return '-';
+  return tile.value >= 0 ? String(tile.value) : '?';
 }
 
 const MAX_VALUE = 11;
@@ -33,29 +46,37 @@ function computeCandidates(
   const used = new Set<number>();
   for (const p of state.players) {
     for (const t of p.rack) {
-      if (t.value < 0) continue;
+      if (t.isJoker || t.value < 0) continue;
       if (t.revealed || p.id === viewerId) used.add(tileKey(t));
     }
   }
   const cur = state.players[state.currentPlayerIndex];
-  if (cur && cur.id === viewerId && state.drawnTile && state.drawnTile.value >= 0) {
+  if (cur && cur.id === viewerId && state.drawnTile && !state.drawnTile.isJoker && state.drawnTile.value >= 0) {
     used.add(tileKey(state.drawnTile));
   }
 
-  let leftBound = tileIndex;
-  for (let a = tileIndex - 1; a >= 0; a--) {
-    const t = target.rack[a]!;
-    if (t.revealed) {
-      leftBound = tileKey(t) + (tileIndex - a);
-      break;
+  let leftBound: number;
+  let rightBound: number;
+  if (state.useJoker) {
+    // A hidden tile might be a Joker, so positional ordering can't narrow it.
+    leftBound = 0;
+    rightBound = MAX_KEY;
+  } else {
+    leftBound = tileIndex;
+    for (let a = tileIndex - 1; a >= 0; a--) {
+      const t = target.rack[a]!;
+      if (t.revealed) {
+        leftBound = tileKey(t) + (tileIndex - a);
+        break;
+      }
     }
-  }
-  let rightBound = MAX_KEY - (target.rack.length - 1 - tileIndex);
-  for (let b = tileIndex + 1; b < target.rack.length; b++) {
-    const t = target.rack[b]!;
-    if (t.revealed) {
-      rightBound = tileKey(t) - (b - tileIndex);
-      break;
+    rightBound = MAX_KEY - (target.rack.length - 1 - tileIndex);
+    for (let b = tileIndex + 1; b < target.rack.length; b++) {
+      const t = target.rack[b]!;
+      if (t.revealed) {
+        rightBound = tileKey(t) - (b - tileIndex);
+        break;
+      }
     }
   }
 
@@ -68,55 +89,61 @@ function computeCandidates(
   return candidates;
 }
 
-function tileColors(color: DaVinciColor) {
-  return color === 'white'
-    ? { background: '#e2e8f0', color: '#0f172a', border: '#cbd5e1' }
-    : { background: '#1e293b', color: '#f8fafc', border: '#0f172a' };
+// Could the still-hidden tile be a Joker the viewer can't account for yet?
+function jokerStillPossible(
+  state: DaVinciGameState,
+  viewerId: string | null,
+  color: DaVinciColor,
+): boolean {
+  if (!state.useJoker) return false;
+  for (const p of state.players) {
+    for (const t of p.rack) {
+      if (!t.isJoker || t.color !== color) continue;
+      if (t.revealed || p.id === viewerId) return false;
+    }
+  }
+  const cur = state.players[state.currentPlayerIndex];
+  if (cur && cur.id === viewerId && state.drawnTile?.isJoker && state.drawnTile.color === color) {
+    return false;
+  }
+  return true;
 }
 
-interface TileViewProps {
-  tile: DaVinciTile;
-  selectable?: boolean;
-  selected?: boolean;
-  onClick?: () => void;
-}
+type HistoryEntry = DaVinciLastAction & { id: number };
 
-function TileView({ tile, selectable, selected, onClick }: TileViewProps) {
-  const c = tileColors(tile.color);
-  const label = tile.value >= 0 ? String(tile.value) : '?';
-  return (
-    <button
-      type="button"
-      disabled={!selectable}
-      onClick={onClick}
-      style={{
-        width: 38,
-        height: 52,
-        borderRadius: 8,
-        background: c.background,
-        color: c.color,
-        border: selected ? '2px solid var(--accent, #6366f1)' : `1px solid ${c.border}`,
-        fontSize: '1.1rem',
-        fontWeight: 700,
-        cursor: selectable ? 'pointer' : 'default',
-        opacity: tile.revealed ? 0.65 : 1,
-        boxShadow: selected ? '0 0 0 2px rgba(99,102,241,0.4)' : 'none',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 0,
-      }}
-      title={tile.revealed ? '已亮出' : '暗牌'}
-    >
-      {label}
-    </button>
-  );
-}
-
-export function DaVinciGame({ state, myMemberId, isSpectator, onGuess, onDecision }: Props) {
+export function DaVinciGame({
+  state,
+  myMemberId,
+  isSpectator,
+  onGuess,
+  onDecision,
+  onPlaceJoker,
+  onSubmitSetup,
+}: Props) {
   const current = state.players[state.currentPlayerIndex];
   const isMyTurn = !isSpectator && current?.id === myMemberId && state.phase === 'playing';
   const [selected, setSelected] = useState<{ targetId: string; tileIndex: number } | null>(null);
+
+  // Accumulate a guess log from the rolling `lastAction` the server sends.
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const lastSigRef = useRef<string | null>(null);
+  const histIdRef = useRef(0);
+  useEffect(() => {
+    const la = state.lastAction;
+    if (!la) {
+      // A fresh game (or pre-first-guess state) clears the log.
+      if (lastSigRef.current !== null) {
+        lastSigRef.current = null;
+        setHistory([]);
+      }
+      return;
+    }
+    const sig = `${la.guesserId}|${la.targetId}|${la.position}|${la.color}|${la.guessedValue}|${la.correct}`;
+    if (sig !== lastSigRef.current) {
+      lastSigRef.current = sig;
+      setHistory((h) => [{ ...la, id: histIdRef.current++ }, ...h].slice(0, 60));
+    }
+  }, [state.lastAction]);
 
   // Drop any stale selection whenever it's no longer actionable.
   useEffect(() => {
@@ -129,142 +156,402 @@ export function DaVinciGame({ state, myMemberId, isSpectator, onGuess, onDecisio
       : [];
   const candidateSet = new Set(candidates);
 
+  const selectedTile =
+    selected != null
+      ? state.players.find((p) => p.id === selected.targetId)?.rack[selected.tileIndex] ?? null
+      : null;
+  const jokerGuessPossible =
+    selectedTile != null && jokerStillPossible(state, myMemberId, selectedTile.color);
+
   function handleGuess(value: number) {
     if (!selected) return;
     onGuess(selected.targetId, selected.tileIndex, value);
     setSelected(null);
   }
 
+  const me = myMemberId != null ? state.players.find((p) => p.id === myMemberId) ?? null : null;
+  const isPlacing = isMyTurn && state.stage === 'placing';
+
+  const inSetup = state.phase === 'setup';
+  const iAmReady = myMemberId != null && state.setupReady.includes(myMemberId);
+  const needSetup = inSetup && !isSpectator && me != null && !iAmReady;
+
+  // Local working copy of my starting rack while arranging Jokers in setup.
+  const [setupRack, setSetupRack] = useState<DaVinciTile[]>([]);
+  const setupKey = needSetup ? (me?.rack.map((t) => `${t.color}${t.isJoker ? 'J' : t.value}`).join(',') ?? '') : '';
+  useEffect(() => {
+    if (needSetup && me) setSetupRack(me.rack.map((t) => ({ ...t })));
+    else setSetupRack([]);
+    // Re-seed only when entering setup or the dealt rack identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needSetup, setupKey]);
+
+  function moveJoker(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= setupRack.length) return;
+    const next = [...setupRack];
+    [next[i], next[j]] = [next[j]!, next[i]!];
+    setSetupRack(next);
+  }
+
+  const totalSetup = state.players.length;
+  const readyCount = state.setupReady.length;
+
+  const drawnLabel = state.drawnTile ? tileText(state.drawnTile) : null;
+
+  const ended = state.phase === 'ended';
+  const winner = state.winnerId != null ? state.players.find((p) => p.id === state.winnerId) ?? null : null;
+  const iWon = state.winnerId != null && state.winnerId === myMemberId;
+
   return (
-    <div className="card">
-      <h2 style={{ marginTop: 0 }}>达芬奇密码</h2>
-      <p style={{ color: 'var(--text-muted)' }}>{state.message}</p>
+    <div
+      className="card"
+      style={{
+        position: 'relative',
+        padding: 0,
+        height: 'min(72vh, 640px)',
+        overflow: 'hidden',
+      }}
+    >
+      <Suspense
+        fallback={
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-muted)',
+              background: 'radial-gradient(ellipse at top, #16243f 0%, #0a0f18 70%)',
+            }}
+          >
+            正在加载 3D 牌桌…
+          </div>
+        }
+      >
+        <DaVinciBoard3D
+          state={state}
+          myMemberId={myMemberId}
+          isMyTurn={isMyTurn}
+          selected={selected}
+          onSelectTile={(targetId, tileIndex) => setSelected({ targetId, tileIndex })}
+        />
+      </Suspense>
 
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.75rem' }}>
-        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>牌堆剩余：{state.deckCount}</span>
-        {state.drawnTile && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            {current?.id === myMemberId ? '你抽到：' : `${current?.name ?? '当前玩家'} 抽到：`}
-            <TileView tile={state.drawnTile} />
-          </span>
-        )}
-      </div>
-
-      {state.lastAction && (
+      {/* Overlay layer: panels capture clicks, the gaps fall through to the canvas. */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {/* Top-left: title, status & deck info */}
         <div
           style={{
-            marginBottom: '1rem',
-            fontSize: '0.9rem',
-            padding: '0.5rem 0.75rem',
-            borderRadius: 8,
-            background: 'var(--surface-2)',
-            color: state.lastAction.correct ? 'var(--success, #22c55e)' : 'var(--danger, #ef4444)',
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            maxWidth: 'min(60%, 360px)',
+            pointerEvents: 'auto',
+            ...panelStyle,
           }}
         >
-          {state.lastAction.guesserName} 猜 {state.lastAction.targetName} 第 {state.lastAction.position + 1} 张（
-          {state.lastAction.color === 'white' ? '白' : '黑'}）= {state.lastAction.guessedValue} →{' '}
-          {state.lastAction.correct ? '猜中！' : '猜错'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <strong style={{ fontSize: '1rem' }}>达芬奇密码</strong>
+            {inSetup ? (
+              <span style={{ fontSize: '0.78rem', color: '#c4b5fd' }}>开局摆放 · {readyCount}/{totalSetup}</span>
+            ) : (
+              <>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>牌堆 {state.deckCount}</span>
+                {drawnLabel && (
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    {current?.id === myMemberId ? '你抽到 ' : `${current?.name ?? '当前'}抽到 `}
+                    <strong style={{ color: 'var(--text)' }}>{drawnLabel}</strong>
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+          <p style={{ margin: '0.35rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            {inSetup
+              ? '牌桌暂不上牌，请在下方完成摆放。全员确认后同时发牌，避免暴露 Joker。'
+              : state.message}
+          </p>
         </div>
-      )}
 
-      <div style={{ display: 'grid', gap: '0.75rem' }}>
-        {state.players.map((p) => {
-          const isCurrent = p.id === current?.id;
-          const isMe = p.id === myMemberId;
-          return (
-            <div
-              key={p.id}
-              style={{
-                background: 'var(--surface-2)',
-                borderRadius: 8,
-                padding: '0.75rem',
-                opacity: p.eliminated ? 0.5 : 1,
-                border: isCurrent ? '1px solid var(--accent, #6366f1)' : '1px solid transparent',
-              }}
-            >
-              <strong>
-                {p.name} {p.isBot && '🤖'} {isMe && '（你）'}
-                {isCurrent && state.phase === 'playing' && ' ← 当前回合'}
-                {p.eliminated && ' · 已出局'}
-              </strong>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.5rem' }}>
-                {p.rack.map((tile, i) => {
-                  const canSelect =
-                    isMyTurn &&
-                    state.stage === 'guessing' &&
-                    !isMe &&
-                    !p.eliminated &&
-                    !tile.revealed;
-                  return (
-                    <TileView
-                      key={i}
-                      tile={tile}
-                      selectable={canSelect}
-                      selected={selected?.targetId === p.id && selected?.tileIndex === i}
-                      onClick={canSelect ? () => setSelected({ targetId: p.id, tileIndex: i }) : undefined}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+        {/* Top-right: guess history log */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            width: 'min(46%, 240px)',
+            maxHeight: '46%',
+            display: 'flex',
+            flexDirection: 'column',
+            pointerEvents: 'auto',
+            ...panelStyle,
+          }}
+        >
+          <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '0.4rem' }}>猜测记录</div>
+          <div style={{ overflowY: 'auto', display: 'grid', gap: '0.3rem', paddingRight: 2 }}>
+            {history.length === 0 ? (
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>暂无记录</span>
+            ) : (
+              history.map((h) => (
+                <div
+                  key={h.id}
+                  style={{
+                    fontSize: '0.76rem',
+                    lineHeight: 1.35,
+                    padding: '0.3rem 0.45rem',
+                    borderRadius: 6,
+                    background: 'rgba(255,255,255,0.04)',
+                    borderLeft: `3px solid ${h.correct ? 'var(--success)' : 'var(--danger)'}`,
+                    color: 'var(--text)',
+                  }}
+                >
+                  <span style={{ color: 'var(--text-muted)' }}>{h.guesserName}</span> 猜{' '}
+                  <span style={{ color: 'var(--text-muted)' }}>{h.targetName}</span> 第{h.position + 1}张（
+                  {h.color === 'white' ? '白' : '黑'}）={h.guessedValue}{' '}
+                  <span style={{ color: h.correct ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
+                    {h.correct ? '✓中' : '✗错'}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
 
-      {isMyTurn && state.stage === 'guessing' && (
-        <div style={{ marginTop: '1rem' }}>
-          {!selected ? (
-            <p style={{ color: 'var(--text-muted)' }}>点击一名对手的暗牌（带 ? 的牌）来猜测它的数字。</p>
-          ) : (
-            <div style={{ display: 'grid', gap: '0.5rem' }}>
-              <p style={{ margin: 0, color: 'var(--text-muted)' }}>
-                选择数字进行猜测（高亮为根据已知信息仍然可能的值）：
+        {/* Bottom-center: actions */}
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: 12,
+            transform: 'translateX(-50%)',
+            width: 'min(92%, 560px)',
+            pointerEvents: 'auto',
+          }}
+        >
+          {inSetup && needSetup && (
+            <div style={{ ...panelStyle, display: 'grid', gap: '0.5rem' }}>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                在下方面板安排起始牌（数字顺序固定，Joker 可移动）。确认后等待全员完成，牌才会一起上桌。
               </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                {Array.from({ length: MAX_VALUE + 1 }, (_, v) => {
-                  const possible = candidateSet.has(v);
-                  return (
-                    <button
-                      key={v}
-                      type="button"
-                      className="btn"
-                      onClick={() => handleGuess(v)}
-                      style={{
-                        minWidth: 40,
-                        opacity: possible ? 1 : 0.4,
-                        background: possible ? undefined : 'var(--surface-2)',
-                      }}
-                    >
-                      {v}
-                    </button>
-                  );
-                })}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', alignItems: 'flex-end' }}>
+                {setupRack.map((t, i) => (
+                  <div key={i} style={{ display: 'grid', gap: 2, justifyItems: 'center' }}>
+                    <MiniTile tile={t} />
+                    {t.isJoker ? (
+                      <div style={{ display: 'flex', gap: 2 }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0 6px', minWidth: 0 }}
+                          disabled={i === 0}
+                          onClick={() => moveJoker(i, -1)}
+                        >
+                          ◀
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0 6px', minWidth: 0 }}
+                          disabled={i === setupRack.length - 1}
+                          onClick={() => moveJoker(i, 1)}
+                        >
+                          ▶
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ height: 22 }} />
+                    )}
+                  </div>
+                ))}
               </div>
-              <button className="btn btn-secondary" style={{ width: 'fit-content' }} onClick={() => setSelected(null)}>
-                取消选择
+              <button
+                className="btn"
+                style={{ justifySelf: 'center' }}
+                onClick={() =>
+                  onSubmitSetup(
+                    setupRack.map((t) => ({ color: t.color, value: t.value, isJoker: t.isJoker })),
+                  )
+                }
+              >
+                确认摆放（{readyCount}/{totalSetup} 已完成）
               </button>
             </div>
           )}
-        </div>
-      )}
 
-      {isMyTurn && state.stage === 'deciding' && (
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <span style={{ alignSelf: 'center', color: 'var(--success, #22c55e)' }}>猜中了！</span>
-          <button className="btn" onClick={() => onDecision(true)}>
-            继续猜测
-          </button>
-          <button className="btn btn-secondary" onClick={() => onDecision(false)}>
-            停止结算（放回暗牌）
-          </button>
-        </div>
-      )}
+          {inSetup && !needSetup && (
+            <div style={{ ...panelStyle, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              等待所有玩家完成摆放… {readyCount}/{totalSetup}
+            </div>
+          )}
 
-      {state.phase === 'ended' && (
-        <div style={{ marginTop: '1rem', color: 'var(--success, #22c55e)', fontWeight: 600 }}>
-          {state.message}
+          {isMyTurn && state.stage === 'guessing' && (
+            <div style={{ ...panelStyle }}>
+              {!selected ? (
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                  点击一名对手的暗牌（带 ? 的牌）来猜测它的数字。
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                    选择数字进行猜测（高亮为仍然可能的值）：
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', justifyContent: 'center' }}>
+                    {Array.from({ length: MAX_VALUE + 1 }, (_, v) => {
+                      const possible = candidateSet.has(v);
+                      return (
+                        <button
+                          key={v}
+                          type="button"
+                          className="btn"
+                          onClick={() => handleGuess(v)}
+                          style={{
+                            minWidth: 40,
+                            opacity: possible ? 1 : 0.4,
+                            background: possible ? undefined : 'var(--surface-2)',
+                          }}
+                        >
+                          {v}
+                        </button>
+                      );
+                    })}
+                    {jokerGuessPossible && (
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => handleGuess(JOKER_VALUE)}
+                        style={{ minWidth: 48, background: 'linear-gradient(180deg, #a855f7, #7c3aed)' }}
+                        title="猜这张是 Joker"
+                      >
+                        [-]
+                      </button>
+                    )}
+                    <button className="btn btn-secondary" onClick={() => setSelected(null)}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isPlacing && me && (
+            <div style={{ ...panelStyle, display: 'grid', gap: '0.5rem' }}>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                选择位置插入你的 Joker（{state.placement?.faceUp ? '将亮出' : '暗置'}）。点击牌之间的缝隙。
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center', alignItems: 'center' }}>
+                <InsertSlot onClick={() => onPlaceJoker(0)} />
+                {me.rack.map((t, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <MiniTile tile={t} />
+                    <InsertSlot onClick={() => onPlaceJoker(i + 1)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isMyTurn && state.stage === 'deciding' && (
+            <div style={{ ...panelStyle, display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+              <span style={{ color: 'var(--success)', fontWeight: 600 }}>猜中了！</span>
+              <button className="btn" onClick={() => onDecision(true)}>
+                继续猜测
+              </button>
+              <button className="btn btn-secondary" onClick={() => onDecision(false)}>
+                停止结算
+              </button>
+            </div>
+          )}
+
         </div>
-      )}
+
+        {/* Center: animated end-of-game banner */}
+        {ended && (
+          <div
+            key={state.winnerId ?? 'end'}
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '42%',
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              textAlign: 'center',
+              padding: '1.1rem 1.8rem',
+              borderRadius: 16,
+              background: iWon
+                ? 'linear-gradient(160deg, rgba(245,158,11,0.95), rgba(217,119,6,0.95))'
+                : 'rgba(12, 18, 30, 0.85)',
+              border: iWon ? '1px solid #fde047' : '1px solid rgba(255,255,255,0.12)',
+              color: iWon ? '#1a1206' : 'var(--text)',
+              backdropFilter: 'blur(8px)',
+              animation: 'dv-banner-pop 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both, dv-banner-glow 2.2s ease-in-out 0.5s infinite',
+            }}
+          >
+            <div style={{ fontSize: '2.2rem', lineHeight: 1, marginBottom: '0.3rem' }}>
+              {iWon ? '🎉' : '🏆'}
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>
+              {iWon ? '胜利！' : winner ? `${winner.name} 获胜` : '游戏结束'}
+            </div>
+            <div style={{ marginTop: '0.35rem', fontSize: '0.9rem', opacity: 0.85 }}>
+              {iWon ? '你赢得了本局' : state.message}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+function MiniTile({ tile }: { tile: DaVinciTile }) {
+  const white = tile.color === 'white';
+  return (
+    <div
+      style={{
+        width: 30,
+        height: 42,
+        borderRadius: 6,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 800,
+        fontSize: '1rem',
+        background: white ? '#e9edf4' : '#171f2c',
+        color: white ? '#0f172a' : '#f1f5f9',
+        border: tile.revealed ? '2px solid #fbbf24' : '1px solid rgba(255,255,255,0.15)',
+      }}
+    >
+      {tileText(tile)}
+    </div>
+  );
+}
+
+function InsertSlot({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="插入到这里"
+      style={{
+        width: 16,
+        height: 46,
+        borderRadius: 6,
+        border: '2px dashed rgba(168,85,247,0.7)',
+        background: 'rgba(168,85,247,0.12)',
+        cursor: 'pointer',
+        padding: 0,
+      }}
+    />
+  );
+}
+
+const panelStyle: CSSProperties = {
+  background: 'rgba(12, 18, 30, 0.72)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 10,
+  padding: '0.6rem 0.75rem',
+  backdropFilter: 'blur(8px)',
+  boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+};

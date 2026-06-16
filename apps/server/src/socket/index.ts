@@ -2,7 +2,7 @@ import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
 import type { Database } from '@game-lobby/db';
 import { verifyToken } from '../middleware/auth.js';
-import type { RoomManager } from '../services/room-manager.js';
+import type { RoomCloseReason, RoomManager } from '../services/room-manager.js';
 import { redactDaVinciState, type DaVinciGameState } from '@game-lobby/game-engine';
 import type { AiDifficulty, GameQueueItem, GameQueueMode } from '@game-lobby/shared';
 
@@ -19,14 +19,27 @@ const setRolesSchema = z.object({
 const davinciGuessSchema = z.object({
   targetPlayerId: z.string(),
   tileIndex: z.number().int().min(0),
-  value: z.number().int().min(0).max(11),
+  // 0..11 is a numeric guess; 12 (JOKER_VALUE) means "I think this is a Joker".
+  value: z.number().int().min(0).max(12),
 });
 const davinciDecisionSchema = z.object({ continue: z.boolean() });
+const davinciPlaceSchema = z.object({ index: z.number().int().min(0) });
+const davinciSetupSchema = z.object({
+  tiles: z.array(
+    z.object({
+      color: z.enum(['black', 'white']),
+      value: z.number().int().min(0).max(12),
+      isJoker: z.boolean(),
+    }),
+  ),
+});
+const startGameSchema = z.object({ useJoker: z.boolean().optional() }).optional();
 
 export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomManager) {
-  // Notify clients (and refresh the lobby) when an empty room is auto-closed.
-  roomManager.setRoomClosedListener(async (roomId) => {
-    io.to(roomId).emit('room:closed', { roomId });
+  // Notify clients (and refresh the lobby) when a room is auto-closed (empty
+  // grace period, idle timeout, or stale/unresponsive game timeout).
+  roomManager.setRoomClosedListener(async (roomId, reason) => {
+    io.to(roomId).emit('room:closed', { roomId, reason, message: roomCloseMessage(reason) });
     const lobbyRooms = await roomManager.listRooms();
     io.emit('lobby:rooms', lobbyRooms);
   });
@@ -210,12 +223,15 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       cb?.({ ok: true, room: detail });
     });
 
-    socket.on('game:start', async (_payload, cb) => {
+    socket.on('game:start', async (payload, cb) => {
       const roomId = getRoomId(socket);
       if (!roomId) {
         cb?.({ ok: false, message: '未加入房间' });
         return;
       }
+
+      const parsedStart = startGameSchema.safeParse(payload);
+      const useJoker = parsedStart.success ? parsedStart.data?.useJoker ?? false : false;
 
       const detail = await roomManager.getRoomDetail(roomId);
       const hostMember = detail?.players.find((p) => p.userId === user.id && p.role === 'host');
@@ -224,7 +240,7 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
         return;
       }
 
-      const result = await roomManager.startNextGame(roomId, hostMember.id);
+      const result = await roomManager.startNextGame(roomId, hostMember.id, { useJoker });
       if (!result.ok) {
         cb?.({ ok: false, message: result.message });
         return;
@@ -309,6 +325,42 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       cb?.({ ok: true });
     });
 
+    socket.on('game:davinci:place', async (payload, cb) => {
+      const parsed = davinciPlaceSchema.safeParse(payload);
+      const roomId = getRoomId(socket);
+      if (!parsed.success || !roomId) {
+        cb?.({ ok: false });
+        return;
+      }
+      const member = await findMember(roomManager, roomId, user.id);
+      if (!member) return;
+
+      const game = await roomManager.processDaVinciPlace(roomId, member.id, parsed.data.index);
+      if (!game) return;
+
+      await emitGameState(io, roomManager, roomId);
+      await processBots(io, roomManager, roomId);
+      cb?.({ ok: true });
+    });
+
+    socket.on('game:davinci:setup', async (payload, cb) => {
+      const parsed = davinciSetupSchema.safeParse(payload);
+      const roomId = getRoomId(socket);
+      if (!parsed.success || !roomId) {
+        cb?.({ ok: false });
+        return;
+      }
+      const member = await findMember(roomManager, roomId, user.id);
+      if (!member) return;
+
+      const game = await roomManager.processDaVinciSetup(roomId, member.id, parsed.data.tiles);
+      if (!game) return;
+
+      await emitGameState(io, roomManager, roomId);
+      await processBots(io, roomManager, roomId);
+      cb?.({ ok: true });
+    });
+
     socket.on('disconnect', async () => {
       const left = await roomManager.leaveRoom(socket.id);
       if (left) {
@@ -323,6 +375,17 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       }
     });
   });
+}
+
+function roomCloseMessage(reason: RoomCloseReason): string {
+  switch (reason) {
+    case 'idle':
+      return '房间长时间未开始游戏，已自动关闭';
+    case 'stale':
+      return '游戏长时间无响应，已自动关闭';
+    default:
+      return '房间已关闭';
+  }
 }
 
 function getRoomId(socket: Socket): string | null {

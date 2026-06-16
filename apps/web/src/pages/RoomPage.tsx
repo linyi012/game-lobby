@@ -16,6 +16,8 @@ import {
   emitAddBot,
   emitDaVinciDecision,
   emitDaVinciGuess,
+  emitDaVinciPlace,
+  emitDaVinciSetup,
   emitSetRoles,
   emitStartGame,
   emitUndercoverDescribe,
@@ -39,6 +41,7 @@ export function RoomPage() {
   const { token, user } = useAuth();
   const [room, setRoom] = useState<RoomDetail | null>(null);
   const [closed, setClosed] = useState(false);
+  const [closedMessage, setClosedMessage] = useState('房间已关闭，正在返回大厅…');
   const [kicked, setKicked] = useState(false);
   const [gameType, setGameType] = useState<GameType | null>(null);
   const [gameState, setGameState] = useState<unknown>(null);
@@ -46,6 +49,7 @@ export function RoomPage() {
   const [botDifficulty, setBotDifficulty] = useState<AiDifficulty>('medium');
   const [queueMode, setQueueMode] = useState<'ordered' | 'random'>('ordered');
   const [selectedQueue, setSelectedQueue] = useState<GameType[]>([...ALL_GAME_TYPES]);
+  const [useJoker, setUseJoker] = useState(false);
 
   const myMember = useMemo(
     () => room?.players.find((p) => p.userId === user?.id) ?? null,
@@ -78,6 +82,7 @@ export function RoomPage() {
     });
     const unsubClosed = onRoomClosed((payload) => {
       if (payload.roomId === roomId) {
+        if (payload.message) setClosedMessage(`${payload.message}，正在返回大厅…`);
         setClosed(true);
         navigate('/', { replace: true });
       }
@@ -120,7 +125,7 @@ export function RoomPage() {
       selectedQueue.map((g, i) => ({ gameType: g, order: i })),
       queueMode,
     );
-    const res = await emitStartGame();
+    const res = await emitStartGame({ useJoker });
     if (!res.ok) setError(res.message ?? '无法开始');
   }
 
@@ -155,7 +160,7 @@ export function RoomPage() {
   }
 
   if (closed) {
-    return <p style={{ color: 'var(--text-muted)' }}>房间已关闭，正在返回大厅…</p>;
+    return <p style={{ color: 'var(--text-muted)' }}>{closedMessage}</p>;
   }
 
   if (!room) {
@@ -316,6 +321,21 @@ export function RoomPage() {
             </p>
           )}
 
+          {isHost && selectedQueue.includes('da_vinci_code') && (
+            <label
+              style={{
+                marginTop: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.9rem',
+              }}
+            >
+              <input type="checkbox" checked={useJoker} onChange={(e) => setUseJoker(e.target.checked)} />
+              达芬奇密码：使用 Joker 牌（[-] 万能牌，可插入任意位置）
+            </label>
+          )}
+
           {isHost && room.status !== 'playing' && (
             <button className="btn" style={{ marginTop: '1rem', width: '100%' }} onClick={handleStartGame}>
               保存队列并开始
@@ -341,6 +361,8 @@ export function RoomPage() {
           isSpectator={isSpectator}
           onGuess={emitDaVinciGuess}
           onDecision={emitDaVinciDecision}
+          onPlaceJoker={emitDaVinciPlace}
+          onSubmitSetup={emitDaVinciSetup}
         />
       ) : null}
     </div>

@@ -48,7 +48,9 @@ export function onGameState(handler: (payload: { gameType: string; state: unknow
   return () => socket?.off('game:state', handler);
 }
 
-export function onRoomClosed(handler: (payload: { roomId: string }) => void) {
+export function onRoomClosed(
+  handler: (payload: { roomId: string; reason?: string; message?: string }) => void,
+) {
   socket?.on('room:closed', handler);
   return () => socket?.off('room:closed', handler);
 }
@@ -82,9 +84,9 @@ export function emitSetRoles(activePlayerIds: string[], spectatorIds: string[]) 
   });
 }
 
-export function emitStartGame() {
+export function emitStartGame(options: { useJoker?: boolean } = {}) {
   return new Promise<{ ok: boolean; message?: string }>((resolve) => {
-    socket?.emit('game:start', {}, resolve);
+    socket?.emit('game:start', options, resolve);
   });
 }
 
@@ -102,6 +104,16 @@ export function emitDaVinciGuess(targetPlayerId: string, tileIndex: number, valu
 
 export function emitDaVinciDecision(shouldContinue: boolean) {
   socket?.emit('game:davinci:decision', { continue: shouldContinue });
+}
+
+export function emitDaVinciPlace(index: number) {
+  socket?.emit('game:davinci:place', { index });
+}
+
+export function emitDaVinciSetup(
+  tiles: { color: 'black' | 'white'; value: number; isJoker: boolean }[],
+) {
+  socket?.emit('game:davinci:setup', { tiles });
 }
 
 export function leaveRoom() {

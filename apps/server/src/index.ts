@@ -37,6 +37,7 @@ const io = new Server(httpServer, {
 });
 
 setupSocketHandlers(io, db, roomManager);
+roomManager.startSweeper();
 
 httpServer.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);

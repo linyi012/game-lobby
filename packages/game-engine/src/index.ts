@@ -12,10 +12,15 @@ import {
   createDaVinciGame,
   guessDaVinciTile,
   decideDaVinciContinue,
+  placeDaVinciJoker,
+  submitDaVinciSetup,
   generateBotDaVinciMove,
   generateBotDaVinciDecision,
+  generateBotDaVinciPlacement,
   computeDaVinciCandidates,
+  jokerStillPossible,
   redactDaVinciState,
+  JOKER_VALUE,
   type DaVinciGameState,
 } from './games/da-vinci-code/logic.js';
 import { pickRandom } from './ai/utils.js';
@@ -28,15 +33,20 @@ export interface GameParticipant {
   isBot: boolean;
 }
 
+export interface GameOptions {
+  useJoker?: boolean;
+}
+
 export function createGame(
   gameType: GameType,
   participants: GameParticipant[],
+  options: GameOptions = {},
 ): GameState {
   switch (gameType) {
     case 'undercover':
       return createUndercoverGame(participants, pickRandom(UNDERCOVER_WORD_PAIRS));
     case 'da_vinci_code':
-      return createDaVinciGame(participants);
+      return createDaVinciGame(participants, { useJoker: options.useJoker });
   }
 }
 
@@ -50,9 +60,14 @@ export {
   createDaVinciGame,
   guessDaVinciTile,
   decideDaVinciContinue,
+  placeDaVinciJoker,
+  submitDaVinciSetup,
   generateBotDaVinciMove,
   generateBotDaVinciDecision,
+  generateBotDaVinciPlacement,
   computeDaVinciCandidates,
+  jokerStillPossible,
   redactDaVinciState,
+  JOKER_VALUE,
   type DaVinciGameState,
 };

@@ -24,10 +24,14 @@ export interface UndercoverGameState {
 
 export type DaVinciColor = 'black' | 'white';
 
+// Mirror of the engine sentinel: a Joker tile and a "guess Joker" both use 12.
+export const JOKER_VALUE = 12;
+
 export interface DaVinciTile {
   color: DaVinciColor;
-  value: number; // -1 means hidden from this viewer
+  value: number; // -1 means hidden from this viewer; 12 (JOKER_VALUE) on a Joker
   revealed: boolean;
+  isJoker: boolean;
 }
 
 export interface DaVinciPlayerState {
@@ -50,8 +54,8 @@ export interface DaVinciLastAction {
 }
 
 export interface DaVinciGameState {
-  phase: 'playing' | 'ended';
-  stage: 'guessing' | 'deciding';
+  phase: 'setup' | 'playing' | 'ended';
+  stage: 'guessing' | 'deciding' | 'placing';
   players: DaVinciPlayerState[];
   currentPlayerIndex: number;
   deck: DaVinciTile[];
@@ -60,4 +64,7 @@ export interface DaVinciGameState {
   lastAction: DaVinciLastAction | null;
   winnerId: string | null;
   message: string;
+  useJoker: boolean;
+  placement: { faceUp: boolean } | null;
+  setupReady: string[];
 }
