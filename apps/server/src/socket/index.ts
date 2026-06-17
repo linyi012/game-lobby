@@ -7,6 +7,8 @@ import { projectGameState, type GameState } from '@game-lobby/game-engine';
 import type { AiDifficulty, GameType } from '@game-lobby/shared';
 import { ALL_GAME_TYPES, GAME_META, GAME_TYPE_ZOD_VALUES } from '@game-lobby/shared';
 import { registerAllGameSockets } from '../games/registry.js';
+import { startDrawGuessTimer } from '../games/draw-guess/socket.js';
+import { resolveWordPool } from '../services/word-pack-service.js';
 
 const joinSchema = z.object({ roomId: z.string().uuid() });
 const lobbySubscribeSchema = z.object({ gameType: z.enum(GAME_TYPE_ZOD_VALUES) });
@@ -16,7 +18,15 @@ const setRolesSchema = z.object({
   spectatorIds: z.array(z.string().uuid()),
 });
 const startGameSchema = z
-  .object({ useJoker: z.boolean().optional(), assistMode: z.boolean().optional() })
+  .object({
+    useJoker: z.boolean().optional(),
+    assistMode: z.boolean().optional(),
+    categoryIds: z.array(z.string()).optional(),
+    userPackIds: z.array(z.string().uuid()).optional(),
+    roomExtraWords: z.array(z.string()).optional(),
+    drawDurationSec: z.number().int().min(30).max(300).optional(),
+    wordSelectDurationSec: z.number().int().min(5).max(60).optional(),
+  })
   .optional();
 
 export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomManager) {
@@ -49,6 +59,7 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
 
     const gameSocketDeps = {
       roomManager,
+      io,
       getRoomId,
       findMember: (roomId: string, userId: string) => findMember(roomManager, roomId, userId),
       afterGameUpdate: async (
@@ -234,13 +245,41 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
 
       const parsedStart = startGameSchema.safeParse(payload);
       const gameType = detail!.gameType;
-      const startOptions =
-        gameType === 'da_vinci_code'
-          ? {
-              useJoker: parsedStart.success ? (parsedStart.data?.useJoker ?? false) : false,
-              assistMode: parsedStart.success ? (parsedStart.data?.assistMode ?? true) : true,
-            }
-          : {};
+      let startOptions: Record<string, unknown> = {};
+
+      if (gameType === 'da_vinci_code') {
+        startOptions = {
+          useJoker: parsedStart.success ? (parsedStart.data?.useJoker ?? false) : false,
+          assistMode: parsedStart.success ? (parsedStart.data?.assistMode ?? true) : true,
+        };
+      } else if (gameType === 'draw_guess') {
+        const data = parsedStart.success ? parsedStart.data : undefined;
+        const categoryIds = data?.categoryIds ?? ['animal', 'daily', 'movie', 'sport'];
+        const userPackIds = data?.userPackIds ?? [];
+        const roomExtraWords = data?.roomExtraWords ?? [];
+        const wordPool = await resolveWordPool(db, {
+          categoryIds,
+          userPackIds,
+          roomExtraWords,
+        });
+        if (wordPool.length < 3) {
+          cb?.({ ok: false, message: '词语池不足，请至少选择包含 3 个词的分类或词库' });
+          return;
+        }
+        startOptions = {
+          categoryIds,
+          userPackIds,
+          roomExtraWords,
+          drawDurationSec: data?.drawDurationSec ?? 90,
+          wordSelectDurationSec: data?.wordSelectDurationSec ?? 10,
+          wordPool,
+          allPlayers: detail!.players.map((p) => ({
+            id: p.id,
+            name: p.displayName,
+            isSpectator: p.role === 'spectator',
+          })),
+        };
+      }
 
       const result = await roomManager.startNextGame(roomId, hostMember.id, startOptions);
       if (!result.ok) {
@@ -271,6 +310,13 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       }
     });
   });
+
+  startDrawGuessTimer(
+    io,
+    roomManager,
+    (roomId) => emitGameState(io, roomManager, roomId),
+    (roomId, state) => emitRoomIfGameEnded(io, roomManager, roomId, state),
+  );
 }
 
 async function broadcastLobbyRooms(io: Server, roomManager: RoomManager, gameType?: GameType) {

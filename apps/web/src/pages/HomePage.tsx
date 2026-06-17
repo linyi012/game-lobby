@@ -31,7 +31,8 @@ export function HomePage() {
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ margin: 0 }}>选择游戏</h1>
         <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)' }}>
-          进入游戏大厅，创建或加入房间
+          进入游戏大厅，创建或加入房间 ·{' '}
+          <Link to="/word-packs">管理词语包</Link>
         </p>
       </div>
 

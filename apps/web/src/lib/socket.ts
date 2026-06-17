@@ -84,13 +84,37 @@ export function getActiveSocket(): Socket | null {
 
 export function emitStartGame(
   gameType: GameType,
-  options: { useJoker?: boolean; assistMode?: boolean } = {},
+  options: {
+    useJoker?: boolean;
+    assistMode?: boolean;
+    categoryIds?: string[];
+    userPackIds?: string[];
+    roomExtraWords?: string | string[];
+    drawDurationSec?: number;
+    wordSelectDurationSec?: number;
+  } = {},
 ) {
   return new Promise<{ ok: boolean; message?: string }>((resolve) => {
-    const payload =
-      gameType === 'da_vinci_code'
-        ? { useJoker: options.useJoker ?? false, assistMode: options.assistMode ?? true }
-        : {};
+    let payload: Record<string, unknown> = {};
+    if (gameType === 'da_vinci_code') {
+      payload = {
+        useJoker: options.useJoker ?? false,
+        assistMode: options.assistMode ?? true,
+      };
+    } else if (gameType === 'draw_guess') {
+      const rawExtra = options.roomExtraWords;
+      const extra = (typeof rawExtra === 'string' ? rawExtra : (rawExtra ?? []).join('\n'))
+        .split(/[,，\n]/)
+        .map((w) => w.trim())
+        .filter(Boolean);
+      payload = {
+        categoryIds: options.categoryIds ?? ['animal', 'daily', 'movie', 'sport'],
+        userPackIds: options.userPackIds ?? [],
+        roomExtraWords: extra ?? [],
+        drawDurationSec: options.drawDurationSec,
+        wordSelectDurationSec: options.wordSelectDurationSec,
+      };
+    }
     socket?.emit('game:start', payload, resolve);
   });
 }

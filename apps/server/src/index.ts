@@ -6,9 +6,11 @@ import { Server } from 'socket.io';
 import { createDb, createPgliteDb } from '@game-lobby/db';
 import { authRouter } from './routes/auth.js';
 import { roomsRouter } from './routes/rooms.js';
+import { wordPacksRouter } from './routes/word-packs.js';
 import { authMiddleware } from './middleware/auth.js';
 import { setupSocketHandlers } from './socket/index.js';
 import { RoomManager } from './services/room-manager.js';
+import { startWordPackSyncScheduler } from './services/word-pack-service.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:5273';
@@ -30,6 +32,7 @@ app.get('/health', (_req, res) => {
 
 app.use('/api/auth', authRouter(db));
 app.use('/api/rooms', authMiddleware, roomsRouter(db, roomManager));
+app.use('/api/word-packs', authMiddleware, wordPacksRouter(db));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -38,6 +41,7 @@ const io = new Server(httpServer, {
 
 setupSocketHandlers(io, db, roomManager);
 roomManager.startSweeper();
+startWordPackSyncScheduler(db);
 
 httpServer.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);

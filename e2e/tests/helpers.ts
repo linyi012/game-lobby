@@ -38,17 +38,21 @@ export async function registerUser(
 
 export async function enterGameLobby(
   page: Page,
-  gameType: 'undercover' | 'da_vinci_code' = 'da_vinci_code',
+  gameType: 'undercover' | 'da_vinci_code' | 'draw_guess' = 'da_vinci_code',
 ): Promise<void> {
   await page.goto(`/games/${gameType}`);
-  const heading = gameType === 'da_vinci_code' ? '达芬奇密码 大厅' : '谁是卧底 大厅';
-  await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  const headings: Record<string, string> = {
+    da_vinci_code: '达芬奇密码 大厅',
+    undercover: '谁是卧底 大厅',
+    draw_guess: '你画我猜 大厅',
+  };
+  await expect(page.getByRole('heading', { name: headings[gameType] })).toBeVisible();
 }
 
 export async function createRoom(
   page: Page,
   roomName: string,
-  gameType: 'undercover' | 'da_vinci_code' = 'da_vinci_code',
+  gameType: 'undercover' | 'da_vinci_code' | 'draw_guess' = 'da_vinci_code',
 ): Promise<string> {
   await enterGameLobby(page, gameType);
 
@@ -61,6 +65,15 @@ export async function createRoom(
   const match = page.url().match(/\/room\/([0-9a-f-]+)/);
   if (!match) throw new Error(`Could not parse room id from URL: ${page.url()}`);
   return match[1]!;
+}
+
+export async function createRoomAndWait(
+  page: Page,
+  gameType: 'undercover' | 'da_vinci_code' | 'draw_guess',
+  roomName: string,
+): Promise<string> {
+  const roomId = await createRoom(page, roomName, gameType);
+  return page.url();
 }
 
 export function playerListSection(page: Page): Locator {

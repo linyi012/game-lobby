@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { GameLobbyPage } from './pages/GameLobbyPage';
 import { RoomPage } from './pages/RoomPage';
+import { WordPackManagePage } from './pages/WordPackManagePage';
 import { Layout } from './components/Layout';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -25,6 +26,7 @@ export function App() {
         }
       >
         <Route index element={<HomePage />} />
+        <Route path="word-packs" element={<WordPackManagePage />} />
         <Route path="games/:gameType" element={<GameLobbyPage />} />
         <Route path="games/:gameType/room/:roomId" element={<RoomPage />} />
       </Route>

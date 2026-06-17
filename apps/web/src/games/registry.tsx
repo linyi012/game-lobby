@@ -12,6 +12,14 @@ import {
   emitDaVinciSetup,
 } from './da-vinci-code/socket';
 import { DaVinciRoomSettings } from './da-vinci-code/RoomSettings';
+import { DrawGuessGame } from './draw-guess/DrawGuessGame';
+import {
+  emitSelectWord,
+  emitStroke,
+  emitClearCanvas,
+  emitGuess,
+} from './draw-guess/socket';
+import { DrawGuessRoomSettings } from './draw-guess/RoomSettings';
 
 export interface GameComponentProps {
   state: GameState;
@@ -27,6 +35,12 @@ export interface RoomSettingsProps {
   setUseJoker: (v: boolean) => void;
   assistMode: boolean;
   setAssistMode: (v: boolean) => void;
+  categoryIds: string[];
+  setCategoryIds: (v: string[]) => void;
+  userPackIds: string[];
+  setUserPackIds: (v: string[]) => void;
+  roomExtraWords: string;
+  setRoomExtraWords: (v: string) => void;
 }
 
 export interface WebGameModule {
@@ -61,6 +75,20 @@ function DaVinciGameWrapper({ state, myMemberId, isSpectator }: GameComponentPro
   );
 }
 
+function DrawGuessGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps) {
+  return (
+    <DrawGuessGame
+      state={state as import('@game-lobby/game-engine').DrawGuessGameState}
+      myMemberId={myMemberId}
+      isSpectator={isSpectator}
+      onSelectWord={emitSelectWord}
+      onStroke={emitStroke}
+      onClear={emitClearCanvas}
+      onGuess={emitGuess}
+    />
+  );
+}
+
 export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
   undercover: {
     Component: UndercoverGameWrapper,
@@ -70,6 +98,11 @@ export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
     Component: DaVinciGameWrapper,
     RoomSettings: DaVinciRoomSettings,
     isEnded: (state) => isGameEnded('da_vinci_code', state as GameState),
+  },
+  draw_guess: {
+    Component: DrawGuessGameWrapper,
+    RoomSettings: DrawGuessRoomSettings,
+    isEnded: (state) => isGameEnded('draw_guess', state as GameState),
   },
 };
 

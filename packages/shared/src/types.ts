@@ -1,4 +1,4 @@
-export type GameType = 'undercover' | 'da_vinci_code';
+export type GameType = 'undercover' | 'da_vinci_code' | 'draw_guess';
 
 export type AiDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
@@ -80,6 +80,14 @@ export const GAME_META: Record<GameType, GameMetaEntry> = {
     botsAllowed: true,
     requiresPerPlayerState: true,
   },
+  draw_guess: {
+    name: '你画我猜',
+    minPlayers: 2,
+    maxPlayers: 8,
+    description: '轮流作画，其他玩家在聊天中猜词，先猜对得分更高。',
+    botsAllowed: false,
+    requiresPerPlayerState: true,
+  },
 };
 
 export const AI_DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
@@ -89,7 +97,7 @@ export const AI_DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
   expert: '专家',
 };
 
-export const ALL_GAME_TYPES: GameType[] = ['undercover', 'da_vinci_code'];
+export const ALL_GAME_TYPES: GameType[] = ['undercover', 'da_vinci_code', 'draw_guess'];
 
 /** Tuple for Zod `z.enum()` — single source with ALL_GAME_TYPES */
 export const GAME_TYPE_ZOD_VALUES = ALL_GAME_TYPES as [GameType, ...GameType[]];

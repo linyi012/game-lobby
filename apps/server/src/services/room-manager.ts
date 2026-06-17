@@ -535,6 +535,10 @@ export class RoomManager {
     return this.games.get(roomId);
   }
 
+  getActiveGameEntries(): [string, InMemoryGame][] {
+    return [...this.games.entries()];
+  }
+
   async markGameEnded(roomId: string): Promise<RoomDetail | null> {
     await this.db.update(rooms).set({ status: 'waiting' }).where(eq(rooms.id, roomId));
     return this.getRoomDetail(roomId);

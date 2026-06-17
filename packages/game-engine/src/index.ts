@@ -2,13 +2,15 @@ import type { GameType } from '@game-lobby/shared';
 import type { GameParticipant } from '@game-lobby/game-core';
 import type { UndercoverGameState } from '@game-lobby/game-undercover';
 import type { DaVinciGameState, DaVinciStartOptions } from '@game-lobby/game-da-vinci-code';
+import type { DrawGuessGameState, DrawGuessStartOptions } from '@game-lobby/game-draw-guess';
 import { getGameModule } from './registry.js';
 
-export type GameState = UndercoverGameState | DaVinciGameState;
+export type GameState = UndercoverGameState | DaVinciGameState | DrawGuessGameState;
 
 export type GameStartOptionsMap = {
   undercover: Record<string, never>;
   da_vinci_code: DaVinciStartOptions;
+  draw_guess: DrawGuessStartOptions;
 };
 
 export type GameStartOptions<T extends GameType = GameType> = GameStartOptionsMap[T];
@@ -85,3 +87,21 @@ export {
   type DaVinciStage,
   type DaVinciStartOptions,
 } from '@game-lobby/game-da-vinci-code';
+
+export {
+  createDrawGuessGame,
+  selectWord,
+  tickDrawGuess,
+  appendStrokes,
+  clearCanvas,
+  submitGuess,
+  redactDrawGuessState,
+  drawGuessModule,
+  type DrawGuessGameState,
+  type DrawGuessPhase,
+  type DrawGuessPlayerState,
+  type DrawStroke,
+  type GuessEntry,
+  type WordSourceSnapshot,
+  type DrawGuessStartOptions,
+} from '@game-lobby/game-draw-guess';

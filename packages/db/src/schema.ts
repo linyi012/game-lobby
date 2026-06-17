@@ -50,3 +50,38 @@ export const gameSessions = pgTable('game_sessions', {
   startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
   endedAt: timestamp('ended_at', { withTimezone: true }),
 });
+
+export const wordPackCategories = pgTable('word_pack_categories', {
+  id: varchar('id', { length: 32 }).primaryKey(),
+  name: varchar('name', { length: 64 }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const wordPacks = pgTable('word_packs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  categoryId: varchar('category_id', { length: 32 }).references(() => wordPackCategories.id, {
+    onDelete: 'cascade',
+  }),
+  name: varchar('name', { length: 64 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const wordEntries = pgTable('word_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  packId: uuid('pack_id')
+    .notNull()
+    .references(() => wordPacks.id, { onDelete: 'cascade' }),
+  word: varchar('word', { length: 32 }).notNull(),
+});
+
+export const wordPackSyncRuns = pgTable('word_pack_sync_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  version: varchar('version', { length: 64 }),
+  success: boolean('success').notNull(),
+  addedCount: integer('added_count').notNull().default(0),
+  removedCount: integer('removed_count').notNull().default(0),
+  error: text('error'),
+  syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
+});

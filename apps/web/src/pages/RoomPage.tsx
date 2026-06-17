@@ -40,6 +40,9 @@ export function RoomPage() {
   const [botDifficulty, setBotDifficulty] = useState<AiDifficulty>('medium');
   const [useJoker, setUseJoker] = useState(false);
   const [assistMode, setAssistMode] = useState(true);
+  const [categoryIds, setCategoryIds] = useState<string[]>(['animal', 'daily', 'movie', 'sport']);
+  const [userPackIds, setUserPackIds] = useState<string[]>([]);
+  const [roomExtraWords, setRoomExtraWords] = useState('');
 
   const gameTypeFromUrl = gameTypeParam as GameType;
   const lobbyPath = `/games/${gameTypeFromUrl}`;
@@ -124,7 +127,13 @@ export function RoomPage() {
 
   async function handleStartGame() {
     if (!room) return;
-    const res = await emitStartGame(room.gameType, { useJoker, assistMode });
+    const res = await emitStartGame(room.gameType, {
+      useJoker,
+      assistMode,
+      categoryIds,
+      userPackIds,
+      roomExtraWords,
+    });
     if (!res.ok) setError(res.message ?? '无法开始');
   }
 
@@ -204,7 +213,7 @@ export function RoomPage() {
         ))}
       </div>
 
-      {isHost && !isPlaying && (
+      {isHost && !isPlaying && meta.botsAllowed && (
         <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <select
             className="input"
@@ -247,6 +256,12 @@ export function RoomPage() {
         setUseJoker,
         assistMode,
         setAssistMode,
+        categoryIds,
+        setCategoryIds,
+        userPackIds,
+        setUserPackIds,
+        roomExtraWords,
+        setRoomExtraWords,
       })}
 
       {isHost && (

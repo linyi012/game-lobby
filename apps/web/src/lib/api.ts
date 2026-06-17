@@ -62,3 +62,62 @@ export function createRoom(token: string, name: string, gameType: GameType, maxP
 export function fetchRoom(token: string, roomId: string) {
   return request<RoomDetail>(`/api/rooms/${roomId}`, {}, token);
 }
+
+export interface WordPackCategory {
+  id: string;
+  name: string;
+  wordCount: number;
+}
+
+export interface UserWordPack {
+  id: string;
+  name: string;
+  words: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WordPackSyncStatus {
+  version: string | null;
+  lastSyncedAt: string | null;
+  success: boolean | null;
+  addedCount: number;
+  removedCount: number;
+  error: string | null;
+}
+
+export function fetchWordPackCategories(token: string) {
+  return request<WordPackCategory[]>('/api/word-packs/categories', {}, token);
+}
+
+export function fetchMyWordPacks(token: string) {
+  return request<UserWordPack[]>('/api/word-packs/mine', {}, token);
+}
+
+export function createWordPack(token: string, name: string, words: string[]) {
+  return request<UserWordPack>(
+    '/api/word-packs',
+    { method: 'POST', body: JSON.stringify({ name, words }) },
+    token,
+  );
+}
+
+export function updateWordPack(token: string, id: string, name: string, words: string[]) {
+  return request<UserWordPack>(
+    `/api/word-packs/${id}`,
+    { method: 'PATCH', body: JSON.stringify({ name, words }) },
+    token,
+  );
+}
+
+export function deleteWordPack(token: string, id: string) {
+  return request<{ ok: boolean }>(`/api/word-packs/${id}`, { method: 'DELETE' }, token);
+}
+
+export function fetchWordPackSyncStatus(token: string) {
+  return request<WordPackSyncStatus>('/api/word-packs/sync-status', {}, token);
+}
+
+export function triggerWordPackSync(token: string) {
+  return request<WordPackSyncStatus>('/api/word-packs/sync', { method: 'POST' }, token);
+}

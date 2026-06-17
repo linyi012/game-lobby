@@ -18,6 +18,7 @@
   "dependencies": {
     "@game-lobby/game-core": "workspace:*",
     "@game-lobby/game-da-vinci-code": "workspace:*",
+    "@game-lobby/game-draw-guess": "workspace:*",
     "@game-lobby/game-undercover": "workspace:*",
     "@game-lobby/shared": "workspace:*"
   },
