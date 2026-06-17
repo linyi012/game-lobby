@@ -51,6 +51,13 @@ export function GameLobbyPage() {
           <h1 style={{ margin: '0.25rem 0 0' }}>{meta.name} 大厅</h1>
           <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)' }}>
             {meta.description}
+            {meta.hasWordPacks && (
+              <>
+                {' '}
+                ·{' '}
+                <Link to={`/games/${gameType}/word-packs`}>管理词语包</Link>
+              </>
+            )}
           </p>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flex: '1 1 280px' }}>

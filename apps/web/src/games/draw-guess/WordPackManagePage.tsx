@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import * as api from '../lib/api';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import { ALL_GAME_TYPES, GAME_META } from '@game-lobby/shared';
+import type { GameType } from '@game-lobby/shared';
+import { useAuth } from '../../context/AuthContext';
+import * as api from '../../lib/api';
 
 export function WordPackManagePage() {
+  const { gameType: gameTypeParam } = useParams<{ gameType: string }>();
   const { token } = useAuth();
   const [categories, setCategories] = useState<api.WordPackCategory[]>([]);
   const [packs, setPacks] = useState<api.UserWordPack[]>([]);
@@ -13,6 +16,11 @@ export function WordPackManagePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+
+  const isValidGame = gameTypeParam != null && ALL_GAME_TYPES.includes(gameTypeParam as GameType);
+  const gameType = (isValidGame ? gameTypeParam : 'draw_guess') as GameType;
+  const meta = GAME_META[gameType];
+  const canManageWordPacks = isValidGame && Boolean(meta.hasWordPacks);
 
   async function reload() {
     if (!token) return;
@@ -27,8 +35,9 @@ export function WordPackManagePage() {
   }
 
   useEffect(() => {
+    if (!canManageWordPacks) return;
     reload().catch((e) => setError(e instanceof Error ? e.message : '加载失败'));
-  }, [token]);
+  }, [token, canManageWordPacks]);
 
   function parseWords(text: string) {
     return [...new Set(text.split(/[,，\n]/).map((w) => w.trim()).filter(Boolean))];
@@ -76,11 +85,16 @@ export function WordPackManagePage() {
     await reload();
   }
 
+  if (!canManageWordPacks) {
+    const redirectTo = isValidGame ? `/games/${gameType}` : '/';
+    return <Navigate to={redirectTo} replace />;
+  }
+
   return (
     <div style={{ display: 'grid', gap: '1rem', maxWidth: 720 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <Link to="/" style={{ color: 'var(--text-muted)' }}>
-          ← 返回首页
+        <Link to={`/games/${gameType}`} style={{ color: 'var(--text-muted)' }}>
+          ← 返回{meta.name}大厅
         </Link>
         <h1 style={{ margin: 0, flex: 1 }}>词语包管理</h1>
       </div>

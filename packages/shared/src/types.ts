@@ -61,6 +61,7 @@ export interface GameMetaEntry {
   description: string;
   botsAllowed: boolean;
   requiresPerPlayerState: boolean;
+  hasWordPacks?: boolean;
 }
 
 export const GAME_META: Record<GameType, GameMetaEntry> = {
@@ -87,6 +88,7 @@ export const GAME_META: Record<GameType, GameMetaEntry> = {
     description: '轮流作画，其他玩家在聊天中猜词，先猜对得分更高。',
     botsAllowed: false,
     requiresPerPlayerState: true,
+    hasWordPacks: true,
   },
 };
 
