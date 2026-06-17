@@ -18,6 +18,8 @@ import {
   emitStroke,
   emitClearCanvas,
   emitGuess,
+  emitPainterHint,
+  emitRevealChar,
 } from './draw-guess/socket';
 import { DrawGuessRoomSettings } from './draw-guess/RoomSettings';
 
@@ -85,6 +87,8 @@ function DrawGuessGameWrapper({ state, myMemberId, isSpectator }: GameComponentP
       onStroke={emitStroke}
       onClear={emitClearCanvas}
       onGuess={emitGuess}
+      onPainterHint={emitPainterHint}
+      onRevealChar={emitRevealChar}
     />
   );
 }

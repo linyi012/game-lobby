@@ -95,6 +95,9 @@ export {
   appendStrokes,
   clearCanvas,
   submitGuess,
+  submitPainterHint,
+  revealPainterChar,
+  maxRevealableChars,
   redactDrawGuessState,
   drawGuessModule,
   type DrawGuessGameState,
@@ -102,6 +105,7 @@ export {
   type DrawGuessPlayerState,
   type DrawStroke,
   type GuessEntry,
+  type PainterHintEntry,
   type WordSourceSnapshot,
   type DrawGuessStartOptions,
 } from '@game-lobby/game-draw-guess';

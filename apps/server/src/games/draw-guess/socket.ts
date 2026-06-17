@@ -5,6 +5,8 @@ import {
   appendStrokes,
   clearCanvas,
   submitGuess,
+  submitPainterHint,
+  revealPainterChar,
   tickDrawGuess,
   type DrawGuessGameState,
   type DrawStroke,
@@ -25,6 +27,8 @@ const strokeSchema = z.object({
   ),
 });
 const guessSchema = z.object({ text: z.string().min(1).max(64) });
+const hintSchema = z.object({ text: z.string().min(1).max(32) });
+const revealCharSchema = z.object({ index: z.number().int().min(0).max(31) });
 
 let timerStarted = false;
 
@@ -150,6 +154,68 @@ export function registerDrawGuessSockets(
     if (roomManager.isGameStateEnded(game.gameType, game.state)) {
       await roomManager.markGameEnded(roomId);
     }
+    await afterGameUpdate(roomId, game.state, { perPlayerState: true });
+    cb?.({ ok: true });
+  });
+
+  socket.on('game:draw-guess:hint', async (payload, cb) => {
+    const parsed = hintSchema.safeParse(payload);
+    const roomId = getRoomId(socket);
+    if (!parsed.success || !roomId) {
+      cb?.({ ok: false });
+      return;
+    }
+    const user = socket.data.user as { id: string };
+    const member = await findMember(roomId, user.id);
+    if (!member) return;
+
+    const game = roomManager.getGame(roomId);
+    if (!game || game.gameType !== 'draw_guess') return;
+
+    const before = JSON.stringify(game.state);
+    game.state = submitPainterHint(
+      game.state as DrawGuessGameState,
+      member.id,
+      parsed.data.text,
+      Date.now(),
+    );
+    if (JSON.stringify(game.state) === before) {
+      cb?.({ ok: false });
+      return;
+    }
+
+    roomManager.touchGameRoom(roomId);
+    await afterGameUpdate(roomId, game.state, { perPlayerState: true });
+    cb?.({ ok: true });
+  });
+
+  socket.on('game:draw-guess:reveal-char', async (payload, cb) => {
+    const parsed = revealCharSchema.safeParse(payload);
+    const roomId = getRoomId(socket);
+    if (!parsed.success || !roomId) {
+      cb?.({ ok: false });
+      return;
+    }
+    const user = socket.data.user as { id: string };
+    const member = await findMember(roomId, user.id);
+    if (!member) return;
+
+    const game = roomManager.getGame(roomId);
+    if (!game || game.gameType !== 'draw_guess') return;
+
+    const before = JSON.stringify(game.state);
+    game.state = revealPainterChar(
+      game.state as DrawGuessGameState,
+      member.id,
+      parsed.data.index,
+      Date.now(),
+    );
+    if (JSON.stringify(game.state) === before) {
+      cb?.({ ok: false });
+      return;
+    }
+
+    roomManager.touchGameRoom(roomId);
     await afterGameUpdate(roomId, game.state, { perPlayerState: true });
     cb?.({ ok: true });
   });

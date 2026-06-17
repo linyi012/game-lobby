@@ -5,6 +5,8 @@ import { GuessChatPanel } from './GuessChatPanel';
 import { WordSelectPanel } from './WordSelectPanel';
 import { RoundSummary } from './RoundSummary';
 import { useStrokeDelta } from './useStrokeDelta';
+import { PainterHintPanel, PainterHintHistory } from './PainterHintPanel';
+import { WordHintBar, buildGuessHintSlots } from './WordHintBar';
 
 export interface DrawGuessGameProps {
   state: DrawGuessGameState;
@@ -14,6 +16,8 @@ export interface DrawGuessGameProps {
   onStroke: (strokes: DrawStroke[]) => void;
   onClear: () => void;
   onGuess: (text: string) => void;
+  onPainterHint: (text: string) => void;
+  onRevealChar: (index: number) => void;
 }
 
 export function DrawGuessGame({
@@ -24,6 +28,8 @@ export function DrawGuessGame({
   onStroke,
   onClear,
   onGuess,
+  onPainterHint,
+  onRevealChar,
 }: DrawGuessGameProps) {
   const [localStrokes, setLocalStrokes] = useState<DrawStroke[]>(state.strokes);
   const [, setTick] = useState(0);
@@ -118,9 +124,15 @@ export function DrawGuessGame({
         <span>
           画家：<strong>{state.players.find((p) => p.id === state.painterId)?.name}</strong>
         </span>
-        {state.phase === 'drawing' && !isPainter && (
+        {state.phase === 'drawing' && !isPainter && hasGuessed && state.selectedWord && (
           <span>
-            提示：<strong>{state.wordHint}</strong>
+            词语：<strong>{state.selectedWord}</strong>
+          </span>
+        )}
+        {state.phase === 'drawing' && !isPainter && !hasGuessed && state.wordHint && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span>提示：</span>
+            <WordHintBar slots={buildGuessHintSlots(state.wordHint)} />
           </span>
         )}
         {isPainter && state.selectedWord && state.phase === 'drawing' && (
@@ -130,6 +142,12 @@ export function DrawGuessGame({
         )}
       </div>
 
+      {state.phase === 'drawing' && state.painterHints.length > 0 && !isPainter && (
+        <div className="card">
+          <PainterHintHistory hints={state.painterHints} />
+        </div>
+      )}
+
       <div
         style={{
           display: 'grid',
@@ -137,25 +155,40 @@ export function DrawGuessGame({
           gap: '1rem',
         }}
       >
-        <section className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ marginTop: 0 }}>画布</h3>
-            {isPainter && state.phase === 'drawing' && (
-              <button type="button" className="btn btn-secondary" onClick={handleClear}>
-                清空画布
-              </button>
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          <section className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ marginTop: 0 }}>画布</h3>
+              {isPainter && state.phase === 'drawing' && (
+                <button type="button" className="btn btn-secondary" onClick={handleClear}>
+                  清空画布
+                </button>
+              )}
+            </div>
+            {state.phase === 'word_select' && isPainter ? (
+              <WordSelectPanel state={state} onSelect={onSelectWord} />
+            ) : (
+              <DrawingCanvas
+                strokes={localStrokes}
+                readOnly={!isPainter || state.phase !== 'drawing'}
+                onStrokeBatch={isPainter && state.phase === 'drawing' ? handleStrokeBatch : undefined}
+              />
             )}
-          </div>
-          {state.phase === 'word_select' && isPainter ? (
-            <WordSelectPanel state={state} onSelect={onSelectWord} />
-          ) : (
-            <DrawingCanvas
-              strokes={localStrokes}
-              readOnly={!isPainter || state.phase !== 'drawing'}
-              onStrokeBatch={isPainter && state.phase === 'drawing' ? handleStrokeBatch : undefined}
+          </section>
+
+          {isPainter && state.phase === 'drawing' && state.selectedWord && (
+            <PainterHintPanel
+              hintsRemaining={state.hintsRemaining}
+              maxHints={3}
+              selectedWord={state.selectedWord}
+              revealedIndices={state.revealedIndices}
+              painterHints={state.painterHints}
+              canSendHints
+              onPainterHint={onPainterHint}
+              onRevealChar={onRevealChar}
             />
           )}
-        </section>
+        </div>
 
         <div style={{ display: 'grid', gap: '1rem' }}>
           <GuessChatPanel guesses={state.guesses} canGuess={canGuess} onGuess={onGuess} />

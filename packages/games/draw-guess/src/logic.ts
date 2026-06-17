@@ -19,6 +19,15 @@ export interface GuessEntry {
   timestamp: number;
 }
 
+export interface PainterHintEntry {
+  id: string;
+  type: 'text' | 'reveal';
+  text?: string;
+  char?: string;
+  charIndex?: number;
+  timestamp: number;
+}
+
 export interface DrawGuessPlayerState {
   id: string;
   name: string;
@@ -64,14 +73,29 @@ export interface DrawGuessGameState {
   wordSelectDurationMs: number;
   wordSource: WordSourceSnapshot;
   wordHint: string;
+  revealedIndices: number[];
+  painterHints: PainterHintEntry[];
+  hintsRemaining: number;
 }
 
 const ROUND_END_MS = 5000;
+const MAX_HINTS_PER_ROUND = 3;
 let guessIdCounter = 0;
+let hintIdCounter = 0;
 
-function buildWordHint(word: string | null): string {
+function buildWordHint(word: string | null, revealedIndices: number[] = []): string {
   if (!word) return '';
-  return [...word].map(() => '_').join(' ');
+  const revealed = new Set(revealedIndices);
+  return [...word].map((ch, i) => (revealed.has(i) ? ch : '_')).join(' ');
+}
+
+export function maxRevealableChars(wordLength: number): number {
+  return Math.max(0, wordLength - 1);
+}
+
+function nextHintId(): string {
+  hintIdCounter += 1;
+  return `hint-${hintIdCounter}`;
 }
 
 function isGuessMatch(guess: string, answer: string): boolean {
@@ -135,6 +159,9 @@ function beginWordSelect(
     guessedIds: [],
     roundScores: {},
     wordHint: '',
+    revealedIndices: [],
+    painterHints: [],
+    hintsRemaining: MAX_HINTS_PER_ROUND,
     phaseEndsAt: now + state.wordSelectDurationMs,
     message: `${state.players.find((p) => p.id === painterId)?.name ?? '画家'} 请选择词语`,
     players: state.players.map((p) => ({ ...p, hasGuessed: false })),
@@ -201,6 +228,9 @@ export function createDrawGuessGame(
     wordSelectDurationMs,
     wordSource,
     wordHint: '',
+    revealedIndices: [],
+    painterHints: [],
+    hintsRemaining: MAX_HINTS_PER_ROUND,
   };
 
   return beginWordSelect(base, now, []);
@@ -212,7 +242,10 @@ function startDrawing(state: DrawGuessGameState, word: string, now: number): Dra
     phase: 'drawing',
     selectedWord: word,
     wordOptions: [],
-    wordHint: buildWordHint(word),
+    wordHint: buildWordHint(word, []),
+    revealedIndices: [],
+    painterHints: [],
+    hintsRemaining: MAX_HINTS_PER_ROUND,
     strokes: [],
     phaseEndsAt: now + state.drawDurationMs,
     message: '作画中，猜家们请猜词！',
@@ -242,7 +275,7 @@ function finishRound(state: DrawGuessGameState, now: number, reason: string): Dr
     ...state,
     phase: 'round_end',
     selectedWord: word,
-    wordHint: buildWordHint(word),
+    wordHint: buildWordHint(word, state.revealedIndices),
     phaseEndsAt: now + ROUND_END_MS,
     message: reason,
   };
@@ -257,7 +290,7 @@ function advancePainter(state: DrawGuessGameState, now: number): DrawGuessGameSt
       ...state,
       phase: 'ended',
       message: '游戏结束！查看最终积分榜',
-      wordHint: state.selectedWord ? buildWordHint(state.selectedWord) : '',
+      wordHint: state.selectedWord ? buildWordHint(state.selectedWord, state.revealedIndices) : '',
     };
   }
 
@@ -373,6 +406,72 @@ export function submitGuess(
   return next;
 }
 
+export function submitPainterHint(
+  state: DrawGuessGameState,
+  playerId: string,
+  text: string,
+  now = Date.now(),
+): DrawGuessGameState {
+  if (state.phase !== 'drawing') return state;
+  if (playerId !== state.painterId) return state;
+  if (state.hintsRemaining <= 0) return state;
+  if (!state.selectedWord) return state;
+
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length > 32) return state;
+  if (trimmed === state.selectedWord.trim()) return state;
+
+  const entry: PainterHintEntry = {
+    id: nextHintId(),
+    type: 'text',
+    text: trimmed,
+    timestamp: now,
+  };
+
+  return {
+    ...state,
+    painterHints: [...state.painterHints, entry],
+    hintsRemaining: state.hintsRemaining - 1,
+    message: '画家发布了提示',
+  };
+}
+
+export function revealPainterChar(
+  state: DrawGuessGameState,
+  playerId: string,
+  charIndex: number,
+  now = Date.now(),
+): DrawGuessGameState {
+  if (state.phase !== 'drawing') return state;
+  if (playerId !== state.painterId) return state;
+  if (state.hintsRemaining <= 0) return state;
+  if (!state.selectedWord) return state;
+
+  const word = state.selectedWord;
+  if (!Number.isInteger(charIndex) || charIndex < 0 || charIndex >= word.length) return state;
+  if (state.revealedIndices.includes(charIndex)) return state;
+  if (state.revealedIndices.length >= maxRevealableChars(word.length)) return state;
+
+  const char = [...word][charIndex]!;
+  const revealedIndices = [...state.revealedIndices, charIndex];
+  const entry: PainterHintEntry = {
+    id: nextHintId(),
+    type: 'reveal',
+    char,
+    charIndex,
+    timestamp: now,
+  };
+
+  return {
+    ...state,
+    revealedIndices,
+    wordHint: buildWordHint(word, revealedIndices),
+    painterHints: [...state.painterHints, entry],
+    hintsRemaining: state.hintsRemaining - 1,
+    message: `画家揭示了第 ${charIndex + 1} 字`,
+  };
+}
+
 export function redactDrawGuessState(
   state: DrawGuessGameState,
   viewerId: string | null,
@@ -392,10 +491,16 @@ export function redactDrawGuessState(
       // painter sees options
     } else if (isPainter && state.phase === 'drawing') {
       wordOptions = [];
+    } else if (viewerHasGuessed && state.phase === 'drawing') {
+      wordOptions = [];
+      selectedWord = state.selectedWord;
+      wordHint = state.selectedWord ?? state.wordHint;
     } else {
       wordOptions = [];
       selectedWord = null;
-      wordHint = state.selectedWord ? buildWordHint(state.selectedWord) : state.wordHint;
+      wordHint = state.selectedWord
+        ? buildWordHint(state.selectedWord, state.revealedIndices)
+        : state.wordHint;
     }
   }
 

@@ -5,12 +5,16 @@ export {
   appendStrokes,
   clearCanvas,
   submitGuess,
+  submitPainterHint,
+  revealPainterChar,
+  maxRevealableChars,
   redactDrawGuessState,
   type DrawGuessGameState,
   type DrawGuessPhase,
   type DrawGuessPlayerState,
   type DrawStroke,
   type GuessEntry,
+  type PainterHintEntry,
   type WordSourceSnapshot,
 } from './logic.js';
 

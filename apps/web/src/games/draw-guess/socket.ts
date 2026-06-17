@@ -25,6 +25,18 @@ export function emitGuess(text: string) {
   });
 }
 
+export function emitPainterHint(text: string) {
+  return new Promise<{ ok: boolean }>((resolve) => {
+    getActiveSocket()?.emit('game:draw-guess:hint', { text }, resolve);
+  });
+}
+
+export function emitRevealChar(index: number) {
+  return new Promise<{ ok: boolean }>((resolve) => {
+    getActiveSocket()?.emit('game:draw-guess:reveal-char', { index }, resolve);
+  });
+}
+
 export function onStrokeDelta(handler: (payload: { strokes: DrawStroke[] }) => void) {
   const s = getActiveSocket();
   if (!s) return () => {};
