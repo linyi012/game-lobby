@@ -8,7 +8,7 @@ import {
   type AiDifficulty,
   type GameType,
 } from '@game-lobby/shared';
-import type { DaVinciGameState, UndercoverGameState } from '@game-lobby/game-engine';
+import type { DaVinciGameState, HeartAttackGameState, UndercoverGameState } from '@game-lobby/game-engine';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../lib/api';
 import {
@@ -42,6 +42,7 @@ export function RoomPage() {
   const [botDifficulty, setBotDifficulty] = useState<AiDifficulty>('medium');
   const [useJoker, setUseJoker] = useState(false);
   const [assistMode, setAssistMode] = useState(true);
+  const [useSpecialCards, setUseSpecialCards] = useState(false);
   const [categoryIds, setCategoryIds] = useState<string[]>(() =>
     gameTypeFromUrl === 'undercover'
       ? ['food', 'sport', 'entertainment', 'transport', 'life', 'animal', 'nature', 'jobs', 'places', 'daily']
@@ -131,6 +132,12 @@ export function RoomPage() {
     setAssistMode(s.assistMode ?? true);
   }, [gameState, gameType]);
 
+  useEffect(() => {
+    if (gameType !== 'german_heart_attack' || !gameState || !isGameEnded(gameState)) return;
+    const s = gameState as HeartAttackGameState;
+    setUseSpecialCards(s.useSpecialCards);
+  }, [gameState, gameType]);
+
   async function handleAddBot() {
     await emitAddBot(botDifficulty);
   }
@@ -140,6 +147,7 @@ export function RoomPage() {
     const res = await emitStartGame(room.gameType, {
       useJoker,
       assistMode,
+      useSpecialCards,
       categoryIds,
       userPackIds,
       roomExtraWords,
@@ -272,6 +280,8 @@ export function RoomPage() {
         setUserPackIds,
         roomExtraWords,
         setRoomExtraWords,
+        useSpecialCards,
+        setUseSpecialCards,
       })}
 
       {isHost && (

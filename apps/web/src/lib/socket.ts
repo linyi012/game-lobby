@@ -93,6 +93,7 @@ export function emitStartGame(
     roomExtraWords?: string | string[];
     drawDurationSec?: number;
     wordSelectDurationSec?: number;
+    useSpecialCards?: boolean;
   } = {},
 ) {
   return new Promise<{ ok: boolean; message?: string }>((resolve) => {
@@ -122,6 +123,10 @@ export function emitStartGame(
         roomExtraWords: extra ?? [],
         drawDurationSec: options.drawDurationSec,
         wordSelectDurationSec: options.wordSelectDurationSec,
+      };
+    } else if (gameType === 'german_heart_attack') {
+      payload = {
+        useSpecialCards: options.useSpecialCards ?? false,
       };
     }
     socket?.emit('game:start', payload, resolve);

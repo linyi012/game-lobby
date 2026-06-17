@@ -28,6 +28,13 @@ import {
   emitRevealChar,
 } from './draw-guess/socket';
 import { DrawGuessRoomSettings } from './draw-guess/RoomSettings';
+import { HeartAttackGame } from './german-heart-attack/HeartAttackGame';
+import {
+  emitHeartAttackFlip,
+  emitHeartAttackSlap,
+  emitHeartAttackChooseWild,
+} from './german-heart-attack/socket';
+import { HeartAttackRoomSettings } from './german-heart-attack/RoomSettings';
 
 export interface GameComponentProps {
   state: GameState;
@@ -52,6 +59,8 @@ export interface RoomSettingsProps {
   setUserPackIds: (v: string[]) => void;
   roomExtraWords: string;
   setRoomExtraWords: (v: string) => void;
+  useSpecialCards: boolean;
+  setUseSpecialCards: (v: boolean) => void;
 }
 
 export interface WebGameModule {
@@ -114,6 +123,19 @@ function DrawGuessGameWrapper({ state, myMemberId, isSpectator }: GameComponentP
   );
 }
 
+function HeartAttackGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps) {
+  return (
+    <HeartAttackGame
+      state={state as import('@game-lobby/game-engine').HeartAttackGameState}
+      myMemberId={myMemberId}
+      isSpectator={isSpectator}
+      onFlip={emitHeartAttackFlip}
+      onSlap={emitHeartAttackSlap}
+      onChooseWild={emitHeartAttackChooseWild}
+    />
+  );
+}
+
 export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
   undercover: {
     Component: UndercoverGameWrapper,
@@ -129,6 +151,11 @@ export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
     Component: DrawGuessGameWrapper,
     RoomSettings: DrawGuessRoomSettings,
     isEnded: (state) => isGameEnded('draw_guess', state as GameState),
+  },
+  german_heart_attack: {
+    Component: HeartAttackGameWrapper,
+    RoomSettings: HeartAttackRoomSettings,
+    isEnded: (state) => isGameEnded('german_heart_attack', state as GameState),
   },
 };
 

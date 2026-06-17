@@ -32,6 +32,7 @@ const startGameSchema = z
       .optional(),
     drawDurationSec: z.number().int().min(30).max(300).optional(),
     wordSelectDurationSec: z.number().int().min(5).max(60).optional(),
+    useSpecialCards: z.boolean().optional(),
   })
   .optional();
 
@@ -306,6 +307,12 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
             name: p.displayName,
             isSpectator: p.role === 'spectator',
           })),
+        };
+      } else if (gameType === 'german_heart_attack') {
+        startOptions = {
+          useSpecialCards: parsedStart.success
+            ? (parsedStart.data?.useSpecialCards ?? false)
+            : false,
         };
       }
 

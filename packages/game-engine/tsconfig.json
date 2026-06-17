@@ -11,6 +11,7 @@
     { "path": "../game-core" },
     { "path": "../games/undercover" },
     { "path": "../games/da-vinci-code" },
-    { "path": "../games/draw-guess" }
+    { "path": "../games/draw-guess" },
+    { "path": "../games/german-heart-attack" }
   ]
 }

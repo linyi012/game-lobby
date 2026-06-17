@@ -3,14 +3,20 @@ import type { GameParticipant } from '@game-lobby/game-core';
 import type { UndercoverGameState, UndercoverStartOptions } from '@game-lobby/game-undercover';
 import type { DaVinciGameState, DaVinciStartOptions } from '@game-lobby/game-da-vinci-code';
 import type { DrawGuessGameState, DrawGuessStartOptions } from '@game-lobby/game-draw-guess';
+import type { HeartAttackGameState, HeartAttackStartOptions } from '@game-lobby/game-german-heart-attack';
 import { getGameModule } from './registry.js';
 
-export type GameState = UndercoverGameState | DaVinciGameState | DrawGuessGameState;
+export type GameState =
+  | UndercoverGameState
+  | DaVinciGameState
+  | DrawGuessGameState
+  | HeartAttackGameState;
 
 export type GameStartOptionsMap = {
   undercover: UndercoverStartOptions;
   da_vinci_code: DaVinciStartOptions;
   draw_guess: DrawGuessStartOptions;
+  german_heart_attack: HeartAttackStartOptions;
 };
 
 export type GameStartOptions<T extends GameType = GameType> = GameStartOptionsMap[T];
@@ -114,3 +120,32 @@ export {
   type WordSourceSnapshot,
   type DrawGuessStartOptions,
 } from '@game-lobby/game-draw-guess';
+
+export {
+  createHeartAttackGame,
+  flipHeartAttackCard,
+  chooseWildFruit,
+  slapHeartAttack,
+  buildDeck,
+  computeFruitTotals,
+  isBellActive,
+  emptyFruitTotals,
+  pickBestWildFruit,
+  generateBotWildChoice,
+  generateBotShouldSlap,
+  redactHeartAttackState,
+  cardLabel,
+  ALL_FRUITS,
+  FRUIT_LABELS,
+  FRUIT_EMOJI,
+  heartAttackModule,
+  type HeartAttackGameState,
+  type HeartAttackPlayerState,
+  type HeartAttackCard,
+  type HeartAttackLastAction,
+  type HeartAttackPhase,
+  type HeartAttackStage,
+  type Fruit,
+  type CardKind,
+  type HeartAttackStartOptions,
+} from '@game-lobby/game-german-heart-attack';

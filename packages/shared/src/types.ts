@@ -1,4 +1,4 @@
-export type GameType = 'undercover' | 'da_vinci_code' | 'draw_guess';
+export type GameType = 'undercover' | 'da_vinci_code' | 'draw_guess' | 'german_heart_attack';
 
 export type AiDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
@@ -92,6 +92,14 @@ export const GAME_META: Record<GameType, GameMetaEntry> = {
     requiresPerPlayerState: true,
     hasWordPacks: true,
   },
+  german_heart_attack: {
+    name: '德国心脏病',
+    minPlayers: 2,
+    maxPlayers: 6,
+    description: '轮流出牌，某种水果合计恰好为 5 时抢先拍铃，先出完手牌者获胜。',
+    botsAllowed: true,
+    requiresPerPlayerState: true,
+  },
 };
 
 export const AI_DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
@@ -101,7 +109,12 @@ export const AI_DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
   expert: '专家',
 };
 
-export const ALL_GAME_TYPES: GameType[] = ['undercover', 'da_vinci_code', 'draw_guess'];
+export const ALL_GAME_TYPES: GameType[] = [
+  'undercover',
+  'da_vinci_code',
+  'draw_guess',
+  'german_heart_attack',
+];
 
 /** Tuple for Zod `z.enum()` — single source with ALL_GAME_TYPES */
 export const GAME_TYPE_ZOD_VALUES = ALL_GAME_TYPES as [GameType, ...GameType[]];

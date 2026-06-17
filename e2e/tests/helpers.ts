@@ -38,13 +38,14 @@ export async function registerUser(
 
 export async function enterGameLobby(
   page: Page,
-  gameType: 'undercover' | 'da_vinci_code' | 'draw_guess' = 'da_vinci_code',
+  gameType: 'undercover' | 'da_vinci_code' | 'draw_guess' | 'german_heart_attack' = 'da_vinci_code',
 ): Promise<void> {
   await page.goto(`/games/${gameType}`);
   const headings: Record<string, string> = {
     da_vinci_code: '达芬奇密码 大厅',
     undercover: '谁是卧底 大厅',
     draw_guess: '你画我猜 大厅',
+    german_heart_attack: '德国心脏病 大厅',
   };
   await expect(page.getByRole('heading', { name: headings[gameType] })).toBeVisible();
 }
@@ -52,7 +53,7 @@ export async function enterGameLobby(
 export async function createRoom(
   page: Page,
   roomName: string,
-  gameType: 'undercover' | 'da_vinci_code' | 'draw_guess' = 'da_vinci_code',
+  gameType: 'undercover' | 'da_vinci_code' | 'draw_guess' | 'german_heart_attack' = 'da_vinci_code',
 ): Promise<string> {
   await enterGameLobby(page, gameType);
 
@@ -69,7 +70,7 @@ export async function createRoom(
 
 export async function createRoomAndWait(
   page: Page,
-  gameType: 'undercover' | 'da_vinci_code' | 'draw_guess',
+  gameType: 'undercover' | 'da_vinci_code' | 'draw_guess' | 'german_heart_attack',
   roomName: string,
 ): Promise<string> {
   const roomId = await createRoom(page, roomName, gameType);
