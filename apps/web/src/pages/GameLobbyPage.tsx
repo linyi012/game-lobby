@@ -58,6 +58,13 @@ export function GameLobbyPage() {
                 <Link to={`/games/${gameType}/word-packs`}>管理词语包</Link>
               </>
             )}
+            {meta.hasPairPacks && (
+              <>
+                {' '}
+                ·{' '}
+                <Link to="/games/undercover/word-pairs">管理词对包</Link>
+              </>
+            )}
           </p>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flex: '1 1 280px' }}>

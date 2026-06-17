@@ -1,6 +1,6 @@
 import type { GameType } from '@game-lobby/shared';
 import type { GameParticipant } from '@game-lobby/game-core';
-import type { UndercoverGameState } from '@game-lobby/game-undercover';
+import type { UndercoverGameState, UndercoverStartOptions } from '@game-lobby/game-undercover';
 import type { DaVinciGameState, DaVinciStartOptions } from '@game-lobby/game-da-vinci-code';
 import type { DrawGuessGameState, DrawGuessStartOptions } from '@game-lobby/game-draw-guess';
 import { getGameModule } from './registry.js';
@@ -8,7 +8,7 @@ import { getGameModule } from './registry.js';
 export type GameState = UndercoverGameState | DaVinciGameState | DrawGuessGameState;
 
 export type GameStartOptionsMap = {
-  undercover: Record<string, never>;
+  undercover: UndercoverStartOptions;
   da_vinci_code: DaVinciStartOptions;
   draw_guess: DrawGuessStartOptions;
 };
@@ -52,15 +52,20 @@ export {
 
 export {
   createUndercoverGame,
-  submitUndercoverDescription,
+  sendUndercoverSpeech,
+  endUndercoverSpeaking,
   submitUndercoverVote,
-  generateBotDescription,
-  generateBotVote,
+  advanceFromReveal,
+  redactUndercoverState,
+  pickPairFromPool,
   undercoverModule,
   type UndercoverGameState,
   type UndercoverPlayerState,
   type UndercoverPhase,
+  type SpeechMessage,
   type UndercoverStartOptions,
+  type PairSourceSnapshot,
+  type EliminatedRole,
 } from '@game-lobby/game-undercover';
 
 export {

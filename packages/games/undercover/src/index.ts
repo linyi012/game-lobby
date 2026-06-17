@@ -1,12 +1,17 @@
 export {
   createUndercoverGame,
-  submitUndercoverDescription,
+  sendUndercoverSpeech,
+  endUndercoverSpeaking,
   submitUndercoverVote,
-  generateBotDescription,
-  generateBotVote,
+  advanceFromReveal,
+  redactUndercoverState,
+  pickPairFromPool,
   type UndercoverGameState,
   type UndercoverPlayerState,
   type UndercoverPhase,
+  type SpeechMessage,
+  type UndercoverStartOptions,
+  type PairSourceSnapshot,
+  type EliminatedRole,
 } from './logic.js';
-export { UNDERCOVER_WORD_PAIRS, UNDERCOVER_HINTS } from './words.js';
-export { undercoverModule, type UndercoverStartOptions } from './module.js';
+export { undercoverModule } from './module.js';

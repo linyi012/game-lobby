@@ -62,6 +62,7 @@ export interface GameMetaEntry {
   botsAllowed: boolean;
   requiresPerPlayerState: boolean;
   hasWordPacks?: boolean;
+  hasPairPacks?: boolean;
 }
 
 export const GAME_META: Record<GameType, GameMetaEntry> = {
@@ -71,7 +72,8 @@ export const GAME_META: Record<GameType, GameMetaEntry> = {
     maxPlayers: 12,
     description: '平民与卧底轮流描述词语，投票找出卧底。',
     botsAllowed: false,
-    requiresPerPlayerState: false,
+    requiresPerPlayerState: true,
+    hasPairPacks: true,
   },
   da_vinci_code: {
     name: '达芬奇密码',

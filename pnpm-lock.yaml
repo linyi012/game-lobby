@@ -26,6 +26,9 @@ importers:
       '@game-lobby/word-packs':
         specifier: workspace:*
         version: link:../../packages/word-packs
+      '@game-lobby/word-pairs':
+        specifier: workspace:*
+        version: link:../../packages/word-pairs
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -209,9 +212,6 @@ importers:
       '@game-lobby/shared':
         specifier: workspace:*
         version: link:../../shared
-      '@game-lobby/word-packs':
-        specifier: workspace:*
-        version: link:../../word-packs
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -228,6 +228,9 @@ importers:
       '@game-lobby/shared':
         specifier: workspace:*
         version: link:../../shared
+      '@game-lobby/word-pairs':
+        specifier: workspace:*
+        version: link:../../word-pairs
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -243,6 +246,19 @@ importers:
         version: 5.9.3
 
   packages/word-packs:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
+
+  packages/word-pairs:
     dependencies:
       zod:
         specifier: ^3.24.1

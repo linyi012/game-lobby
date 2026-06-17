@@ -1,8 +1,17 @@
-import type { AiDifficulty } from '@game-lobby/shared';
-import { pickRandom, shouldBotMakeMistake } from '@game-lobby/game-core';
-import { UNDERCOVER_HINTS } from './words.js';
+import { pickRandom } from '@game-lobby/game-core';
+import type { WordPair } from '@game-lobby/word-pairs';
 
 export type UndercoverPhase = 'describe' | 'vote' | 'reveal' | 'ended';
+
+export type EliminatedRole = 'undercover' | 'civilian' | 'whiteboard';
+
+export interface SpeechMessage {
+  id: string;
+  playerId: string;
+  playerName: string;
+  text: string;
+  round: number;
+}
 
 export interface UndercoverPlayerState {
   id: string;
@@ -13,7 +22,12 @@ export interface UndercoverPlayerState {
   isUndercover: boolean;
   isWhiteBoard: boolean;
   description: string | null;
-  votedFor: string | null;
+}
+
+export interface PairSourceSnapshot {
+  categoryIds: string[];
+  userPairPackIds: string[];
+  roomExtraPairs: WordPair[];
 }
 
 export interface UndercoverGameState {
@@ -21,16 +35,58 @@ export interface UndercoverGameState {
   round: number;
   civilianWord: string;
   undercoverWord: string;
+  pairSource: PairSourceSnapshot;
   players: UndercoverPlayerState[];
   currentSpeakerIndex: number;
+  speeches: SpeechMessage[];
   votes: Record<string, string>;
+  lastEliminated: { id: string; name: string; role: EliminatedRole } | null;
+  gameContinues: boolean | null;
   winner: 'civilian' | 'undercover' | 'whiteboard' | null;
   message: string;
 }
 
+export interface UndercoverStartOptions {
+  pairPool: WordPair[];
+  categoryIds: string[];
+  userPairPackIds: string[];
+  roomExtraPairs: WordPair[];
+}
+
+function playerRole(player: UndercoverPlayerState): EliminatedRole {
+  if (player.isUndercover) return 'undercover';
+  if (player.isWhiteBoard) return 'whiteboard';
+  return 'civilian';
+}
+
+function roleLabel(role: EliminatedRole): string {
+  if (role === 'undercover') return '卧底';
+  if (role === 'whiteboard') return '白板';
+  return '平民';
+}
+
+function containsOwnWord(text: string, word: string | null): boolean {
+  if (!word) return false;
+  return text.toLowerCase().includes(word.toLowerCase());
+}
+
+function alivePlayers(state: UndercoverGameState): UndercoverPlayerState[] {
+  return state.players.filter((p) => p.isAlive);
+}
+
+function currentSpeaker(state: UndercoverGameState): UndercoverPlayerState | undefined {
+  const alive = alivePlayers(state);
+  return alive[state.currentSpeakerIndex];
+}
+
+function nextSpeechId(state: UndercoverGameState, playerId: string): string {
+  return `${state.round}-${playerId}-${state.speeches.length}`;
+}
+
 export function createUndercoverGame(
   playerIds: { id: string; name: string; isBot: boolean }[],
-  pair: [string, string],
+  pair: WordPair,
+  pairSource: PairSourceSnapshot,
 ): UndercoverGameState {
   const [civilianWord, undercoverWord] = pair;
   const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
@@ -54,36 +110,77 @@ export function createUndercoverGame(
     isUndercover: i === undercoverIndex,
     isWhiteBoard: i === whiteBoardIndex,
     description: null,
-    votedFor: null,
   }));
+
+  const firstSpeaker = players.filter((p) => p.isAlive)[0];
 
   return {
     phase: 'describe',
     round: 1,
     civilianWord,
     undercoverWord,
+    pairSource,
     players,
     currentSpeakerIndex: 0,
+    speeches: [],
     votes: {},
+    lastEliminated: null,
+    gameContinues: null,
     winner: null,
-    message: '请按顺序描述你的词语，不要直接说出词语本身。',
+    message: firstSpeaker
+      ? `请按顺序描述你的词语，不要直接说出词语本身。轮到 ${firstSpeaker.name} 发言。`
+      : '请按顺序描述你的词语，不要直接说出词语本身。',
   };
 }
 
-export function submitUndercoverDescription(
+export function sendUndercoverSpeech(
   state: UndercoverGameState,
   playerId: string,
-  description: string,
+  text: string,
 ): UndercoverGameState {
-  const alive = state.players.filter((p) => p.isAlive);
-  const speaker = alive[state.currentSpeakerIndex];
-  if (!speaker || speaker.id !== playerId || state.phase !== 'describe') {
-    return state;
+  const trimmed = text.trim();
+  if (!trimmed || state.phase !== 'describe') return state;
+
+  const speaker = currentSpeaker(state);
+  if (!speaker || speaker.id !== playerId) return state;
+  if (containsOwnWord(trimmed, speaker.word)) {
+    return { ...state, message: '描述中不能包含你的词语本身。' };
   }
+
+  const message: SpeechMessage = {
+    id: nextSpeechId(state, playerId),
+    playerId: speaker.id,
+    playerName: speaker.name,
+    text: trimmed,
+    round: state.round,
+  };
+
+  return {
+    ...state,
+    speeches: [...state.speeches, message],
+    message: `${speaker.name} 发言中…`,
+  };
+}
+
+export function endUndercoverSpeaking(
+  state: UndercoverGameState,
+  playerId: string,
+): UndercoverGameState {
+  if (state.phase !== 'describe') return state;
+
+  const speaker = currentSpeaker(state);
+  if (!speaker || speaker.id !== playerId) return state;
+
+  const roundSpeeches = state.speeches.filter(
+    (s) => s.round === state.round && s.playerId === playerId,
+  );
+  const description =
+    roundSpeeches.length > 0 ? roundSpeeches.map((s) => s.text).join('；') : '（跳过发言）';
 
   const updatedPlayers = state.players.map((p) =>
     p.id === playerId ? { ...p, description } : p,
   );
+  const alive = updatedPlayers.filter((p) => p.isAlive);
   const nextIndex = state.currentSpeakerIndex + 1;
 
   if (nextIndex >= alive.length) {
@@ -92,15 +189,46 @@ export function submitUndercoverDescription(
       players: updatedPlayers,
       phase: 'vote',
       currentSpeakerIndex: 0,
+      votes: {},
       message: '描述结束，请投票选出你认为的卧底。',
     };
   }
 
+  const nextSpeaker = alive[nextIndex]!;
   return {
     ...state,
     players: updatedPlayers,
     currentSpeakerIndex: nextIndex,
-    message: `轮到 ${alive[nextIndex]!.name} 描述。`,
+    message: `轮到 ${nextSpeaker.name} 发言。`,
+  };
+}
+
+function resolveVoteTally(votes: Record<string, string>): Record<string, number> {
+  const tally: Record<string, number> = {};
+  for (const target of Object.values(votes)) {
+    tally[target] = (tally[target] ?? 0) + 1;
+  }
+  return tally;
+}
+
+function topVotedIds(tally: Record<string, number>): string[] {
+  const values = Object.values(tally);
+  if (values.length === 0) return [];
+  const maxVotes = Math.max(...values);
+  return Object.entries(tally)
+    .filter(([, count]) => count === maxVotes)
+    .map(([id]) => id);
+}
+
+function beginReveal(
+  state: UndercoverGameState,
+  updates: Partial<UndercoverGameState>,
+): UndercoverGameState {
+  return {
+    ...state,
+    ...updates,
+    phase: 'reveal',
+    votes: {},
   };
 }
 
@@ -114,20 +242,30 @@ export function submitUndercoverVote(
   if (!voter) return state;
 
   const votes = { ...state.votes, [voterId]: targetId };
-  const alive = state.players.filter((p) => p.isAlive);
+  const alive = alivePlayers(state);
   if (Object.keys(votes).length < alive.length) {
     return { ...state, votes, message: '等待其他玩家投票…' };
   }
 
-  const tally: Record<string, number> = {};
-  for (const target of Object.values(votes)) {
-    tally[target] = (tally[target] ?? 0) + 1;
+  const tally = resolveVoteTally(votes);
+  const tiedIds = topVotedIds(tally);
+
+  if (tiedIds.length > 1) {
+    const names = tiedIds
+      .map((id) => state.players.find((p) => p.id === id)?.name ?? id)
+      .join('、');
+    return beginReveal(state, {
+      lastEliminated: null,
+      gameContinues: true,
+      message: `投票平票（${names}），本轮无人淘汰，即将进入下一轮。`,
+    });
   }
-  const maxVotes = Math.max(...Object.values(tally));
-  const eliminatedId = Object.entries(tally).find(([, c]) => c === maxVotes)?.[0];
+
+  const eliminatedId = tiedIds[0];
   if (!eliminatedId) return state;
 
   const eliminated = state.players.find((p) => p.id === eliminatedId)!;
+  const role = playerRole(eliminated);
   const updatedPlayers = state.players.map((p) =>
     p.id === eliminatedId ? { ...p, isAlive: false } : p,
   );
@@ -138,84 +276,98 @@ export function submitUndercoverVote(
   const undercoverCount = aliveAfter.filter((p) => p.isUndercover).length;
 
   if (!undercoverAlive) {
-    return {
-      ...state,
+    return beginReveal(state, {
       players: updatedPlayers,
-      phase: 'ended',
-      votes: {},
+      lastEliminated: { id: eliminated.id, name: eliminated.name, role },
+      gameContinues: false,
       winner: 'civilian',
       message: `卧底 ${eliminated.name} 被投出，平民胜利！`,
-    };
+    });
   }
 
   if (undercoverCount >= civilianAlive) {
-    return {
-      ...state,
+    return beginReveal(state, {
       players: updatedPlayers,
-      phase: 'ended',
-      votes: {},
+      lastEliminated: { id: eliminated.id, name: eliminated.name, role },
+      gameContinues: false,
       winner: 'undercover',
-      message: `卧底人数占优，卧底胜利！`,
-    };
+      message: '卧底人数占优，卧底胜利！',
+    });
   }
 
   if (eliminated.isWhiteBoard) {
-    return {
-      ...state,
+    return beginReveal(state, {
       players: updatedPlayers,
-      phase: 'ended',
-      votes: {},
+      lastEliminated: { id: eliminated.id, name: eliminated.name, role },
+      gameContinues: false,
       winner: 'whiteboard',
       message: `白板 ${eliminated.name} 被误投，白板单独胜利！`,
-    };
+    });
   }
+
+  return beginReveal(state, {
+    players: updatedPlayers,
+    lastEliminated: { id: eliminated.id, name: eliminated.name, role },
+    gameContinues: true,
+    winner: null,
+    message: `${eliminated.name}（${roleLabel(role)}）被淘汰，游戏继续。`,
+  });
+}
+
+export function advanceFromReveal(state: UndercoverGameState): UndercoverGameState {
+  if (state.phase !== 'reveal') return state;
+
+  if (!state.gameContinues) {
+    return { ...state, phase: 'ended' };
+  }
+
+  const alive = state.players.filter((p) => p.isAlive);
+  const firstSpeaker = alive[0];
 
   return {
     ...state,
-    players: updatedPlayers.map((p) => ({ ...p, description: null, votedFor: null })),
     phase: 'describe',
     round: state.round + 1,
     currentSpeakerIndex: 0,
     votes: {},
-    message: `${eliminated.name} 被淘汰，进入第 ${state.round + 1} 轮描述。`,
+    lastEliminated: null,
+    gameContinues: null,
+    players: state.players.map((p) => ({ ...p, description: null })),
+    message: firstSpeaker
+      ? `进入第 ${state.round + 1} 轮描述，轮到 ${firstSpeaker.name} 发言。`
+      : `进入第 ${state.round + 1} 轮描述。`,
   };
 }
 
-export function generateBotDescription(
-  player: UndercoverPlayerState,
-  difficulty: AiDifficulty,
-): string {
-  if (player.isWhiteBoard || !player.word) {
-    const generic = ['一种常见的东西', '生活中经常见到', '大家都熟悉', '挺普遍的'];
-    return pickRandom(generic);
-  }
+export function redactUndercoverState(
+  state: UndercoverGameState,
+  viewerId: string | null,
+): UndercoverGameState {
+  const isEnded = state.phase === 'ended';
+  const isReveal = state.phase === 'reveal';
 
-  const hints = UNDERCOVER_HINTS[player.word] ?? ['有趣', '常见', '熟悉'];
-  if (shouldBotMakeMistake(difficulty)) {
-    const wrongHints = Object.values(UNDERCOVER_HINTS).flat();
-    return pickRandom(wrongHints);
-  }
+  const players = state.players.map((p) => {
+    const isSelf = viewerId != null && p.id === viewerId;
+    const revealedInReveal =
+      isReveal && state.lastEliminated != null && state.lastEliminated.id === p.id;
+    const showRole = isEnded || revealedInReveal || (!p.isAlive && (isReveal || isEnded));
 
-  const count = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
-  return hints.slice(0, count).join('，');
+    return {
+      ...p,
+      word: isSelf ? p.word : null,
+      isUndercover: showRole ? p.isUndercover : false,
+      isWhiteBoard: isSelf || showRole ? p.isWhiteBoard : false,
+    };
+  });
+
+  return {
+    ...state,
+    civilianWord: isEnded ? state.civilianWord : '',
+    undercoverWord: isEnded ? state.undercoverWord : '',
+    players,
+  };
 }
 
-export function generateBotVote(
-  state: UndercoverGameState,
-  botId: string,
-  difficulty: AiDifficulty,
-): string {
-  const alive = state.players.filter((p) => p.isAlive && p.id !== botId);
-  const bot = state.players.find((p) => p.id === botId)!;
-
-  if (shouldBotMakeMistake(difficulty) || bot.isUndercover) {
-    const nonSelf = alive.filter((p) => !p.isUndercover || bot.isUndercover);
-    return pickRandom(nonSelf).id;
-  }
-
-  const suspicious = alive.filter((p) => {
-    const desc = p.description ?? '';
-    return desc.length < 4 || desc.includes('常见') || desc.includes('普遍');
-  });
-  return (suspicious[0] ?? pickRandom(alive)).id;
+export function pickPairFromPool(pool: WordPair[]): WordPair {
+  return pickRandom(pool.length > 0 ? pool : [['苹果', '梨']]);
 }

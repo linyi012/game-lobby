@@ -290,3 +290,141 @@ textarea {
     gap: 0.75rem;
   }
 }
+
+/* 谁是卧底 */
+.uc-game {
+  display: grid;
+  gap: 1rem;
+}
+
+.uc-phase-header {
+  padding: 0.25rem 0;
+}
+
+.uc-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.uc-main {
+  display: grid;
+  gap: 1rem;
+}
+
+.uc-word-card {
+  text-align: center;
+  background: linear-gradient(135deg, var(--surface-2), var(--surface));
+}
+
+.uc-word-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.uc-word-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.uc-player-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--surface-2);
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.uc-speaker-active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25);
+}
+
+.uc-player-eliminated {
+  opacity: 0.55;
+}
+
+.uc-player-desc {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: right;
+  flex: 1;
+}
+
+.uc-badge-speaking {
+  margin-left: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--primary);
+}
+
+.uc-round-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.uc-round-picker-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.uc-round-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.uc-round-tab {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.uc-round-tab-active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.uc-chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+}
+
+.uc-chat-feed {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  max-height: 320px;
+}
+
+.uc-chat-message {
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.uc-reveal-banner {
+  border-left: 4px solid var(--warning);
+}
+
+.uc-ended-banner {
+  border-left: 4px solid var(--success);
+}

@@ -3,7 +3,13 @@ import type { GameType } from '@game-lobby/shared';
 import { isGameEnded } from '@game-lobby/game-engine';
 import type { GameState } from '@game-lobby/game-engine';
 import { UndercoverGame } from './undercover/UndercoverGame';
-import { emitUndercoverDescribe, emitUndercoverVote } from './undercover/socket';
+import {
+  emitUndercoverSpeech,
+  emitUndercoverEndSpeaking,
+  emitUndercoverVote,
+  emitUndercoverContinueReveal,
+} from './undercover/socket';
+import { UndercoverRoomSettings } from './undercover/RoomSettings';
 import { DaVinciGame } from './da-vinci-code/DaVinciGame';
 import {
   emitDaVinciGuess,
@@ -27,6 +33,9 @@ export interface GameComponentProps {
   state: GameState;
   myMemberId: string | null;
   isSpectator: boolean;
+  isHost?: boolean;
+  canStartNext?: boolean;
+  onStartNextGame?: () => void;
 }
 
 export interface RoomSettingsProps {
@@ -51,14 +60,26 @@ export interface WebGameModule {
   isEnded: (state: unknown) => boolean;
 }
 
-function UndercoverGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps) {
+function UndercoverGameWrapper({
+  state,
+  myMemberId,
+  isSpectator,
+  isHost,
+  canStartNext,
+  onStartNextGame,
+}: GameComponentProps) {
   return (
     <UndercoverGame
       state={state as import('@game-lobby/game-engine').UndercoverGameState}
       myMemberId={myMemberId}
       isSpectator={isSpectator}
-      onDescribe={emitUndercoverDescribe}
+      isHost={isHost}
+      canStartNext={canStartNext}
+      onStartNext={onStartNextGame}
+      onSpeech={emitUndercoverSpeech}
+      onEndSpeaking={emitUndercoverEndSpeaking}
       onVote={emitUndercoverVote}
+      onContinueReveal={emitUndercoverContinueReveal}
     />
   );
 }
@@ -96,6 +117,7 @@ function DrawGuessGameWrapper({ state, myMemberId, isSpectator }: GameComponentP
 export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
   undercover: {
     Component: UndercoverGameWrapper,
+    RoomSettings: UndercoverRoomSettings,
     isEnded: (state) => isGameEnded('undercover', state as GameState),
   },
   da_vinci_code: {

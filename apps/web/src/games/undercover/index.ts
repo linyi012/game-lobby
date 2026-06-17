@@ -1,2 +1,7 @@
 export { UndercoverGame } from './UndercoverGame';
-export { emitUndercoverDescribe, emitUndercoverVote } from './socket';
+export {
+  emitUndercoverSpeech,
+  emitUndercoverEndSpeaking,
+  emitUndercoverVote,
+  emitUndercoverContinueReveal,
+} from './socket';

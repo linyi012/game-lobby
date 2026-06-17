@@ -8,7 +8,7 @@ import {
   type AiDifficulty,
   type GameType,
 } from '@game-lobby/shared';
-import type { DaVinciGameState } from '@game-lobby/game-engine';
+import type { DaVinciGameState, UndercoverGameState } from '@game-lobby/game-engine';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../lib/api';
 import {
@@ -29,6 +29,8 @@ import { GAME_REGISTRY, renderGameSettings } from '../games/registry';
 export function RoomPage() {
   const { gameType: gameTypeParam, roomId } = useParams<{ gameType: string; roomId: string }>();
   const navigate = useNavigate();
+  const gameTypeFromUrl = gameTypeParam as GameType;
+  const lobbyPath = `/games/${gameTypeFromUrl}`;
   const { token, user } = useAuth();
   const [room, setRoom] = useState<RoomDetail | null>(null);
   const [closed, setClosed] = useState(false);
@@ -40,12 +42,13 @@ export function RoomPage() {
   const [botDifficulty, setBotDifficulty] = useState<AiDifficulty>('medium');
   const [useJoker, setUseJoker] = useState(false);
   const [assistMode, setAssistMode] = useState(true);
-  const [categoryIds, setCategoryIds] = useState<string[]>(['animal', 'daily', 'movie', 'sport']);
+  const [categoryIds, setCategoryIds] = useState<string[]>(() =>
+    gameTypeFromUrl === 'undercover'
+      ? ['food', 'sport', 'entertainment', 'transport', 'life', 'animal', 'nature', 'jobs', 'places', 'daily']
+      : ['animal', 'daily', 'movie', 'sport'],
+  );
   const [userPackIds, setUserPackIds] = useState<string[]>([]);
   const [roomExtraWords, setRoomExtraWords] = useState('');
-
-  const gameTypeFromUrl = gameTypeParam as GameType;
-  const lobbyPath = `/games/${gameTypeFromUrl}`;
 
   const activeGameMod = gameType ? GAME_REGISTRY[gameType] : null;
   const isGameEnded = (state: unknown) =>
@@ -59,7 +62,14 @@ export function RoomPage() {
   const isSpectator = myMember?.role === 'spectator';
 
   const isPlaying = room?.status === 'playing';
-  const isIntermission = room?.status === 'waiting' && gameState != null && isGameEnded(gameState);
+  const isUndercoverFinalReveal =
+    gameType === 'undercover' &&
+    gameState != null &&
+    (gameState as UndercoverGameState).phase === 'reveal' &&
+    (gameState as UndercoverGameState).gameContinues === false;
+  const isGameFinished =
+    gameState != null && (isGameEnded(gameState) || isUndercoverFinalReveal);
+  const isIntermission = room?.status === 'waiting' && gameState != null && isGameFinished;
   const isPreGame = room?.status === 'waiting' && !isIntermission;
   const showSidePanels = isPreGame || isIntermission;
 
@@ -314,6 +324,9 @@ export function RoomPage() {
           state={gameState as import('@game-lobby/game-engine').GameState}
           myMemberId={myMember?.id ?? null}
           isSpectator={isSpectator}
+          isHost={isHost}
+          canStartNext={isIntermission}
+          onStartNextGame={handleStartGame}
         />
       ) : null}
     </div>

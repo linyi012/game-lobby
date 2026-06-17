@@ -3,12 +3,14 @@ import { z } from 'zod';
 import type { Database } from '@game-lobby/db';
 import { verifyToken } from '../middleware/auth.js';
 import type { RoomCloseReason, RoomManager } from '../services/room-manager.js';
-import { projectGameState, type GameState } from '@game-lobby/game-engine';
+import { projectGameState, type GameState, type UndercoverGameState } from '@game-lobby/game-engine';
 import type { AiDifficulty, GameType } from '@game-lobby/shared';
 import { ALL_GAME_TYPES, GAME_META, GAME_TYPE_ZOD_VALUES } from '@game-lobby/shared';
 import { registerAllGameSockets } from '../games/registry.js';
 import { startDrawGuessTimer } from '../games/draw-guess/socket.js';
 import { resolveWordPool } from '../services/word-pack-service.js';
+import { resolvePairPool } from '../services/word-pair-service.js';
+import { parsePairLines } from '@game-lobby/word-pairs';
 
 const joinSchema = z.object({ roomId: z.string().uuid() });
 const lobbySubscribeSchema = z.object({ gameType: z.enum(GAME_TYPE_ZOD_VALUES) });
@@ -23,7 +25,11 @@ const startGameSchema = z
     assistMode: z.boolean().optional(),
     categoryIds: z.array(z.string()).optional(),
     userPackIds: z.array(z.string().uuid()).optional(),
+    userPairPackIds: z.array(z.string().uuid()).optional(),
     roomExtraWords: z.array(z.string()).optional(),
+    roomExtraPairs: z
+      .array(z.tuple([z.string().min(1).max(32), z.string().min(1).max(32)]))
+      .optional(),
     drawDurationSec: z.number().int().min(30).max(300).optional(),
     wordSelectDurationSec: z.number().int().min(5).max(60).optional(),
   })
@@ -252,6 +258,28 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
           useJoker: parsedStart.success ? (parsedStart.data?.useJoker ?? false) : false,
           assistMode: parsedStart.success ? (parsedStart.data?.assistMode ?? true) : true,
         };
+      } else if (gameType === 'undercover') {
+        const data = parsedStart.success ? parsedStart.data : undefined;
+        const categoryIds = data?.categoryIds ?? ['food', 'sport', 'entertainment', 'transport', 'life', 'animal', 'nature', 'jobs', 'places', 'daily'];
+        const userPairPackIds = data?.userPairPackIds ?? [];
+        const roomExtraPairs =
+          data?.roomExtraPairs ??
+          (data?.roomExtraWords ? parsePairLines(data.roomExtraWords.join('\n')) : []);
+        const pairPool = await resolvePairPool(db, {
+          categoryIds,
+          userPairPackIds,
+          roomExtraPairs,
+        });
+        if (pairPool.length < 1) {
+          cb?.({ ok: false, message: '词对池不足，请至少选择包含 1 组词对的分类或词库' });
+          return;
+        }
+        startOptions = {
+          categoryIds,
+          userPairPackIds,
+          roomExtraPairs,
+          pairPool,
+        };
       } else if (gameType === 'draw_guess') {
         const data = parsedStart.success ? parsedStart.data : undefined;
         const categoryIds = data?.categoryIds ?? ['animal', 'daily', 'movie', 'sport'];
@@ -339,7 +367,16 @@ async function emitRoomIfGameEnded(
   state: unknown,
 ) {
   const game = roomManager.getGame(roomId);
-  if (!game || !roomManager.isGameStateEnded(game.gameType, state as GameState)) return;
+  if (!game) return;
+
+  const ended = roomManager.isGameStateEnded(game.gameType, state as GameState);
+  const finalReveal =
+    game.gameType === 'undercover' &&
+    (state as UndercoverGameState).phase === 'reveal' &&
+    (state as UndercoverGameState).gameContinues === false;
+
+  if (!ended && !finalReveal) return;
+
   const detail = await roomManager.getRoomDetail(roomId);
   if (detail) {
     io.to(roomId).emit('room:updated', detail);

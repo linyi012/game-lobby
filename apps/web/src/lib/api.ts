@@ -121,3 +121,75 @@ export function fetchWordPackSyncStatus(token: string) {
 export function triggerWordPackSync(token: string) {
   return request<WordPackSyncStatus>('/api/word-packs/sync', { method: 'POST' }, token);
 }
+
+export interface PairPackCategory {
+  id: string;
+  name: string;
+  pairCount: number;
+}
+
+export interface UserPairPack {
+  id: string;
+  name: string;
+  pairs: [string, string][];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PairPackSyncStatus {
+  version: string | null;
+  lastSyncedAt: string | null;
+  success: boolean | null;
+  addedCount: number;
+  removedCount: number;
+  error: string | null;
+}
+
+export function fetchPairPackCategories(token: string) {
+  return request<PairPackCategory[]>('/api/word-pairs/categories', {}, token);
+}
+
+export function fetchMyPairPacks(token: string) {
+  return request<UserPairPack[]>('/api/word-pairs/mine', {}, token);
+}
+
+export function createPairPack(token: string, name: string, pairs: [string, string][]) {
+  return request<UserPairPack>(
+    '/api/word-pairs',
+    { method: 'POST', body: JSON.stringify({ name, pairs }) },
+    token,
+  );
+}
+
+export function updatePairPack(token: string, id: string, name: string, pairs: [string, string][]) {
+  return request<UserPairPack>(
+    `/api/word-pairs/${id}`,
+    { method: 'PATCH', body: JSON.stringify({ name, pairs }) },
+    token,
+  );
+}
+
+export function deletePairPack(token: string, id: string) {
+  return request<{ ok: boolean }>(`/api/word-pairs/${id}`, { method: 'DELETE' }, token);
+}
+
+export function fetchPairPackSyncStatus(token: string) {
+  return request<PairPackSyncStatus>('/api/word-pairs/sync-status', {}, token);
+}
+
+export function triggerPairPackSync(token: string) {
+  return request<PairPackSyncStatus>('/api/word-pairs/sync', { method: 'POST' }, token);
+}
+
+export function parsePairLines(text: string): [string, string][] {
+  const pairs: [string, string][] = [];
+  for (const line of text.split(/\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      pairs.push([parts[0]!, parts[1]!]);
+    }
+  }
+  return pairs;
+}

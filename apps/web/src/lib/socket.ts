@@ -89,6 +89,7 @@ export function emitStartGame(
     assistMode?: boolean;
     categoryIds?: string[];
     userPackIds?: string[];
+    userPairPackIds?: string[];
     roomExtraWords?: string | string[];
     drawDurationSec?: number;
     wordSelectDurationSec?: number;
@@ -100,6 +101,14 @@ export function emitStartGame(
       payload = {
         useJoker: options.useJoker ?? false,
         assistMode: options.assistMode ?? true,
+      };
+    } else if (gameType === 'undercover') {
+      const rawExtra = options.roomExtraWords;
+      const extraText = typeof rawExtra === 'string' ? rawExtra : (rawExtra ?? []).join('\n');
+      payload = {
+        categoryIds: options.categoryIds ?? ['food', 'sport', 'entertainment', 'transport', 'life', 'animal', 'nature', 'jobs', 'places', 'daily'],
+        userPairPackIds: options.userPairPackIds ?? options.userPackIds ?? [],
+        roomExtraWords: extraText.split('\n').map((w) => w.trim()).filter(Boolean),
       };
     } else if (gameType === 'draw_guess') {
       const rawExtra = options.roomExtraWords;

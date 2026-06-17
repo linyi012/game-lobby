@@ -1,5 +1,5 @@
 {
-  "name": "@game-lobby/game-undercover",
+  "name": "@game-lobby/word-pairs",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,18 +9,16 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./data/manifest.json": "./data/manifest.json"
   },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@game-lobby/game-core": "workspace:*",
-    "@game-lobby/shared": "workspace:*",
-    "@game-lobby/word-pairs": "workspace:*"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

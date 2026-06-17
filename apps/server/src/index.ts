@@ -7,11 +7,13 @@ import { createDb, createPgliteDb } from '@game-lobby/db';
 import { authRouter } from './routes/auth.js';
 import { roomsRouter } from './routes/rooms.js';
 import { wordPacksRouter } from './routes/word-packs.js';
+import { wordPairsRouter } from './routes/word-pairs.js';
 import { authMiddleware } from './middleware/auth.js';
 import { setupSocketHandlers } from './socket/index.js';
 import { RoomManager } from './services/room-manager.js';
 import { startGuestUserSweeper } from './services/guest-user-service.js';
 import { startWordPackSyncScheduler } from './services/word-pack-service.js';
+import { startPairPackSyncScheduler } from './services/word-pair-service.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:5273';
@@ -34,6 +36,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRouter(db));
 app.use('/api/rooms', authMiddleware, roomsRouter(db, roomManager));
 app.use('/api/word-packs', authMiddleware, wordPacksRouter(db));
+app.use('/api/word-pairs', authMiddleware, wordPairsRouter(db));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -44,6 +47,7 @@ setupSocketHandlers(io, db, roomManager);
 roomManager.startSweeper();
 startGuestUserSweeper(db);
 startWordPackSyncScheduler(db);
+startPairPackSyncScheduler(db);
 
 httpServer.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
