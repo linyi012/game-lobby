@@ -53,6 +53,20 @@ export function DrawGuessGame({
     state.activePlayerIds.includes(myMemberId) &&
     !hasGuessed;
 
+  const handleStrokeBatch = useCallback(
+    (strokes: DrawStroke[]) => {
+      // Painter doesn't receive stroke-delta from server; optimistically apply locally
+      setLocalStrokes((prev) => [...prev, ...strokes]);
+      onStroke(strokes);
+    },
+    [onStroke],
+  );
+
+  const handleClear = useCallback(() => {
+    setLocalStrokes([]);
+    onClear();
+  }, [onClear]);
+
   const phaseLabel = useMemo(() => {
     switch (state.phase) {
       case 'word_select':
@@ -127,7 +141,7 @@ export function DrawGuessGame({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ marginTop: 0 }}>画布</h3>
             {isPainter && state.phase === 'drawing' && (
-              <button type="button" className="btn btn-secondary" onClick={onClear}>
+              <button type="button" className="btn btn-secondary" onClick={handleClear}>
                 清空画布
               </button>
             )}
@@ -138,7 +152,7 @@ export function DrawGuessGame({
             <DrawingCanvas
               strokes={localStrokes}
               readOnly={!isPainter || state.phase !== 'drawing'}
-              onStrokeBatch={isPainter && state.phase === 'drawing' ? onStroke : undefined}
+              onStrokeBatch={isPainter && state.phase === 'drawing' ? handleStrokeBatch : undefined}
             />
           )}
         </section>

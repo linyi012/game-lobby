@@ -44,7 +44,7 @@ function renderAll(ctx: CanvasRenderingContext2D, strokes: DrawStroke[], w: numb
 export function DrawingCanvas({ strokes, readOnly = false, onStrokeBatch }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [color, setColor] = useState(COLORS[0]!);
+  const [color, setColor] = useState('#000000');
   const [width, setWidth] = useState(4);
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const drawingRef = useRef(false);
