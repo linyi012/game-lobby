@@ -25,6 +25,8 @@ import {
   onRoomUpdated,
 } from '../lib/socket';
 import { GAME_REGISTRY, renderGameSettings } from '../games/registry';
+import { defaultCustomRoles } from '../games/werewolf/RoomSettings';
+import type { RolePresetId, WerewolfRole } from '@game-lobby/game-engine';
 
 export function RoomPage() {
   const { gameType: gameTypeParam, roomId } = useParams<{ gameType: string; roomId: string }>();
@@ -50,6 +52,13 @@ export function RoomPage() {
   );
   const [userPackIds, setUserPackIds] = useState<string[]>([]);
   const [roomExtraWords, setRoomExtraWords] = useState('');
+  const [werewolfRolePreset, setWerewolfRolePreset] = useState<RolePresetId>('simple_6');
+  const [werewolfCustomRoles, setWerewolfCustomRoles] = useState<WerewolfRole[]>(() =>
+    defaultCustomRoles(),
+  );
+  const [werewolfDiscussionMode, setWerewolfDiscussionMode] = useState<'free' | 'sequential'>(
+    'sequential',
+  );
 
   const activeGameMod = gameType ? GAME_REGISTRY[gameType] : null;
   const isGameEnded = (state: unknown) =>
@@ -151,6 +160,9 @@ export function RoomPage() {
       categoryIds,
       userPackIds,
       roomExtraWords,
+      rolePreset: werewolfRolePreset,
+      customRoles: werewolfCustomRoles,
+      discussionMode: werewolfDiscussionMode,
     });
     if (!res.ok) setError(res.message ?? '无法开始');
   }
@@ -282,6 +294,12 @@ export function RoomPage() {
         setRoomExtraWords,
         useSpecialCards,
         setUseSpecialCards,
+        werewolfRolePreset,
+        setWerewolfRolePreset,
+        werewolfCustomRoles,
+        setWerewolfCustomRoles,
+        werewolfDiscussionMode,
+        setWerewolfDiscussionMode,
       })}
 
       {isHost && (

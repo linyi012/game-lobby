@@ -33,6 +33,13 @@ const startGameSchema = z
     drawDurationSec: z.number().int().min(30).max(300).optional(),
     wordSelectDurationSec: z.number().int().min(5).max(60).optional(),
     useSpecialCards: z.boolean().optional(),
+    rolePreset: z.enum(['simple_6', 'standard_9', 'classic_12', 'custom']).optional(),
+    customRoles: z
+      .array(
+        z.enum(['werewolf', 'villager', 'seer', 'witch', 'hunter', 'guard', 'idiot']),
+      )
+      .optional(),
+    discussionMode: z.enum(['free', 'sequential']).optional(),
   })
   .optional();
 
@@ -313,6 +320,13 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
           useSpecialCards: parsedStart.success
             ? (parsedStart.data?.useSpecialCards ?? false)
             : false,
+        };
+      } else if (gameType === 'werewolf') {
+        const data = parsedStart.success ? parsedStart.data : undefined;
+        startOptions = {
+          rolePreset: data?.rolePreset ?? 'simple_6',
+          customRoles: data?.customRoles,
+          discussionMode: data?.discussionMode ?? 'sequential',
         };
       }
 

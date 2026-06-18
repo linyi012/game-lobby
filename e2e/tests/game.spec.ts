@@ -41,4 +41,26 @@ test.describe('开始游戏', () => {
 
     await expect(page.locator('.badge', { hasText: '游戏中' })).toBeVisible();
   });
+
+  test('房主与电脑可以开始狼人杀', async ({ page }) => {
+    await loginAsGuest(page);
+    await createRoom(page, unique('房间'), 'werewolf');
+
+    for (let i = 0; i < 5; i++) {
+      await addBot(page);
+    }
+    await expect(playerListSection(page).getByText(/电脑-/)).toHaveCount(5);
+
+    await expect(async () => {
+      await page.getByRole('button', { name: '开始游戏' }).click();
+      await expect(page.locator('.badge', { hasText: '游戏中' })).toBeVisible({
+        timeout: 3000,
+      });
+      await expect(page.getByText('狼人杀', { exact: true })).toBeVisible({
+        timeout: 3000,
+      });
+    }).toPass({ timeout: 20_000 });
+
+    await expect(page.locator('.badge', { hasText: '游戏中' })).toBeVisible();
+  });
 });

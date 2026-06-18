@@ -4,19 +4,22 @@ import type { UndercoverGameState, UndercoverStartOptions } from '@game-lobby/ga
 import type { DaVinciGameState, DaVinciStartOptions } from '@game-lobby/game-da-vinci-code';
 import type { DrawGuessGameState, DrawGuessStartOptions } from '@game-lobby/game-draw-guess';
 import type { HeartAttackGameState, HeartAttackStartOptions } from '@game-lobby/game-german-heart-attack';
+import type { WerewolfGameState, WerewolfStartOptions } from '@game-lobby/game-werewolf';
 import { getGameModule } from './registry.js';
 
 export type GameState =
   | UndercoverGameState
   | DaVinciGameState
   | DrawGuessGameState
-  | HeartAttackGameState;
+  | HeartAttackGameState
+  | WerewolfGameState;
 
 export type GameStartOptionsMap = {
   undercover: UndercoverStartOptions;
   da_vinci_code: DaVinciStartOptions;
   draw_guess: DrawGuessStartOptions;
   german_heart_attack: HeartAttackStartOptions;
+  werewolf: WerewolfStartOptions;
 };
 
 export type GameStartOptions<T extends GameType = GameType> = GameStartOptionsMap[T];
@@ -149,3 +152,41 @@ export {
   type CardKind,
   type HeartAttackStartOptions,
 } from '@game-lobby/game-german-heart-attack';
+
+export {
+  createWerewolfGame,
+  sendWerewolfSpeech,
+  endWerewolfSpeaking,
+  submitDayVote,
+  submitWolfVote,
+  sendWolfChat,
+  submitSeerPeek,
+  submitWitchAction,
+  submitGuardProtect,
+  submitHunterShoot,
+  advanceFromDayAnnounce,
+  advanceWerewolfFromReveal,
+  advancePhaseOnTimeout,
+  skipHunterShoot,
+  resolveNight,
+  validateRoleBoard,
+  resolveRolesFromOptions,
+  redactWerewolfState,
+  getWolfTeammateIds,
+  ROLE_LABELS,
+  ROLE_PRESET_ROLES,
+  werewolfModule,
+  type WerewolfGameState,
+  type WerewolfPlayerState,
+  type WerewolfPhase,
+  type WerewolfRole,
+  type WerewolfRoleOrHidden,
+  type WerewolfStartOptions,
+  type RolePresetId,
+  type RoleBoardConfig,
+  type WolfChatMessage,
+  type SeerPeekRecord,
+  type EliminationRecord,
+  type DiscussionMode,
+  type WitchActionType,
+} from '@game-lobby/game-werewolf';

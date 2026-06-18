@@ -1,4 +1,9 @@
-export type GameType = 'undercover' | 'da_vinci_code' | 'draw_guess' | 'german_heart_attack';
+export type GameType =
+  | 'undercover'
+  | 'da_vinci_code'
+  | 'draw_guess'
+  | 'german_heart_attack'
+  | 'werewolf';
 
 export type AiDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
@@ -100,6 +105,14 @@ export const GAME_META: Record<GameType, GameMetaEntry> = {
     botsAllowed: true,
     requiresPerPlayerState: true,
   },
+  werewolf: {
+    name: '狼人杀',
+    minPlayers: 6,
+    maxPlayers: 12,
+    description: '狼人夜间刀人，好人白天放逐，可配置角色板。',
+    botsAllowed: true,
+    requiresPerPlayerState: true,
+  },
 };
 
 export const AI_DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
@@ -114,6 +127,7 @@ export const ALL_GAME_TYPES: GameType[] = [
   'da_vinci_code',
   'draw_guess',
   'german_heart_attack',
+  'werewolf',
 ];
 
 /** Tuple for Zod `z.enum()` — single source with ALL_GAME_TYPES */

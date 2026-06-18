@@ -35,6 +35,22 @@ import {
   emitHeartAttackChooseWild,
 } from './german-heart-attack/socket';
 import { HeartAttackRoomSettings } from './german-heart-attack/RoomSettings';
+import { WerewolfGame } from './werewolf/WerewolfGame';
+import {
+  emitContinue,
+  emitDayVote,
+  emitEndSpeaking,
+  emitGuardProtect,
+  emitHunterShoot,
+  emitSeerPeek,
+  emitSkipHunter,
+  emitWerewolfSpeech,
+  emitWitchAct,
+  emitWolfChat,
+  emitWolfVote,
+} from './werewolf/socket';
+import { WerewolfRoomSettings } from './werewolf/RoomSettings';
+import type { RolePresetId, WerewolfRole } from '@game-lobby/game-engine';
 
 export interface GameComponentProps {
   state: GameState;
@@ -61,6 +77,12 @@ export interface RoomSettingsProps {
   setRoomExtraWords: (v: string) => void;
   useSpecialCards: boolean;
   setUseSpecialCards: (v: boolean) => void;
+  werewolfRolePreset: RolePresetId;
+  setWerewolfRolePreset: (v: RolePresetId) => void;
+  werewolfCustomRoles: WerewolfRole[];
+  setWerewolfCustomRoles: (v: WerewolfRole[]) => void;
+  werewolfDiscussionMode: 'free' | 'sequential';
+  setWerewolfDiscussionMode: (v: 'free' | 'sequential') => void;
 }
 
 export interface WebGameModule {
@@ -136,6 +158,27 @@ function HeartAttackGameWrapper({ state, myMemberId, isSpectator }: GameComponen
   );
 }
 
+function WerewolfGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps) {
+  return (
+    <WerewolfGame
+      state={state as import('@game-lobby/game-engine').WerewolfGameState}
+      myMemberId={myMemberId}
+      isSpectator={isSpectator}
+      onWolfVote={emitWolfVote}
+      onWolfChat={emitWolfChat}
+      onSeerPeek={emitSeerPeek}
+      onWitchAct={emitWitchAct}
+      onGuardProtect={emitGuardProtect}
+      onSpeech={emitWerewolfSpeech}
+      onEndSpeaking={emitEndSpeaking}
+      onDayVote={emitDayVote}
+      onHunterShoot={emitHunterShoot}
+      onSkipHunter={emitSkipHunter}
+      onContinue={emitContinue}
+    />
+  );
+}
+
 export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
   undercover: {
     Component: UndercoverGameWrapper,
@@ -156,6 +199,11 @@ export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
     Component: HeartAttackGameWrapper,
     RoomSettings: HeartAttackRoomSettings,
     isEnded: (state) => isGameEnded('german_heart_attack', state as GameState),
+  },
+  werewolf: {
+    Component: WerewolfGameWrapper,
+    RoomSettings: WerewolfRoomSettings,
+    isEnded: (state) => isGameEnded('werewolf', state as GameState),
   },
 };
 

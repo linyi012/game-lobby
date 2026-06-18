@@ -183,6 +183,9 @@ importers:
       '@game-lobby/game-undercover':
         specifier: workspace:*
         version: link:../games/undercover
+      '@game-lobby/game-werewolf':
+        specifier: workspace:*
+        version: link:../games/werewolf
       '@game-lobby/shared':
         specifier: workspace:*
         version: link:../shared
@@ -250,6 +253,22 @@ importers:
       '@game-lobby/word-pairs':
         specifier: workspace:*
         version: link:../../word-pairs
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
+
+  packages/games/werewolf:
+    dependencies:
+      '@game-lobby/game-core':
+        specifier: workspace:*
+        version: link:../../game-core
+      '@game-lobby/shared':
+        specifier: workspace:*
+        version: link:../../shared
     devDependencies:
       typescript:
         specifier: ^5.7.2

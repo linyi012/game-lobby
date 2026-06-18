@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import type { GameType, RoomDetail, RoomSummary } from '@game-lobby/shared';
+import type { RolePresetId, WerewolfRole } from '@game-lobby/game-engine';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'http://localhost:3001';
 
@@ -94,6 +95,9 @@ export function emitStartGame(
     drawDurationSec?: number;
     wordSelectDurationSec?: number;
     useSpecialCards?: boolean;
+    rolePreset?: RolePresetId;
+    customRoles?: WerewolfRole[];
+    discussionMode?: 'free' | 'sequential';
   } = {},
 ) {
   return new Promise<{ ok: boolean; message?: string }>((resolve) => {
@@ -127,6 +131,12 @@ export function emitStartGame(
     } else if (gameType === 'german_heart_attack') {
       payload = {
         useSpecialCards: options.useSpecialCards ?? false,
+      };
+    } else if (gameType === 'werewolf') {
+      payload = {
+        rolePreset: options.rolePreset ?? 'simple_6',
+        customRoles: options.customRoles,
+        discussionMode: options.discussionMode ?? 'sequential',
       };
     }
     socket?.emit('game:start', payload, resolve);
