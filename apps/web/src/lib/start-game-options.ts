@@ -22,4 +22,5 @@ export type GameStartOptionsPayload = {
   mainTimeSec?: number;
   byoyomiSec?: number;
   byoyomiPeriods?: number;
+  incrementSec?: number;
 };

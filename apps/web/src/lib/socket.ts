@@ -118,6 +118,12 @@ export function emitStartGame(
     rolePreset?: RolePresetId;
     customRoles?: WerewolfRole[];
     discussionMode?: 'free' | 'sequential';
+    boardSize?: 9 | 13 | 19;
+    handicap?: number;
+    mainTimeSec?: number;
+    byoyomiSec?: number;
+    byoyomiPeriods?: number;
+    incrementSec?: number;
   } = {},
 ) {
   return new Promise<{ ok: boolean; message?: string }>((resolve) => {
@@ -172,6 +178,19 @@ export function emitStartGame(
         rolePreset: options.rolePreset ?? 'simple_6',
         customRoles: options.customRoles,
         discussionMode: options.discussionMode ?? 'sequential',
+      };
+    } else if (gameType === 'go') {
+      payload = {
+        boardSize: options.boardSize ?? 19,
+        handicap: options.handicap ?? 0,
+        mainTimeSec: options.mainTimeSec ?? 600,
+        byoyomiSec: options.byoyomiSec ?? 30,
+        byoyomiPeriods: options.byoyomiPeriods ?? 3,
+      };
+    } else if (gameType === 'chess') {
+      payload = {
+        mainTimeSec: options.mainTimeSec ?? 600,
+        incrementSec: options.incrementSec ?? 5,
       };
     }
     socket?.emit('game:start', payload, resolve);

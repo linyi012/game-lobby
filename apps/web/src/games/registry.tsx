@@ -59,6 +59,9 @@ import { emitGomokuPlace } from './gomoku/socket';
 import { GoGame } from './go/GoGame';
 import { emitGoPass, emitGoPlay, emitGoResign } from './go/socket';
 import { GoRoomSettings } from './go/RoomSettings';
+import { ChessGame } from './chess/ChessGame';
+import { emitChessMove, emitChessResign } from './chess/socket';
+import { ChessRoomSettings } from './chess/RoomSettings';
 
 export interface GameComponentProps {
   state: GameState;
@@ -210,6 +213,18 @@ function GoGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps) {
   );
 }
 
+function ChessGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps) {
+  return (
+    <ChessGame
+      state={state as import('@game-lobby/game-engine').ChessGameState}
+      myMemberId={myMemberId}
+      isSpectator={isSpectator}
+      onMove={emitChessMove}
+      onResign={emitChessResign}
+    />
+  );
+}
+
 export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
   undercover: {
     Component: UndercoverGameWrapper,
@@ -249,6 +264,11 @@ export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
     Component: GoGameWrapper,
     RoomSettings: GoRoomSettings,
     isEnded: (state) => isGameEnded('go', state as GameState),
+  },
+  chess: {
+    Component: ChessGameWrapper,
+    RoomSettings: ChessRoomSettings,
+    isEnded: (state) => isGameEnded('chess', state as GameState),
   },
 };
 

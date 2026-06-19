@@ -7,6 +7,7 @@ import { registerHeartAttackSockets } from './german-heart-attack/socket.js';
 import { registerWerewolfSockets } from './werewolf/socket.js';
 import { registerGomokuSockets } from './gomoku/socket.js';
 import { registerGoSockets } from './go/socket.js';
+import { registerChessSockets } from './chess/socket.js';
 import type { GameSocketDeps } from './undercover/socket.js';
 
 export type { GameSocketDeps };
@@ -23,4 +24,5 @@ export function registerAllGameSockets(
   registerWerewolfSockets(socket, deps);
   registerGomokuSockets(socket, deps);
   registerGoSockets(socket, deps);
+  registerChessSockets(socket, deps);
 }

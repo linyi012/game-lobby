@@ -171,6 +171,9 @@ importers:
       '@game-lobby/game-act-guess':
         specifier: workspace:*
         version: link:../games/act-guess
+      '@game-lobby/game-chess':
+        specifier: workspace:*
+        version: link:../games/chess
       '@game-lobby/game-core':
         specifier: workspace:*
         version: link:../game-core
@@ -211,6 +214,25 @@ importers:
       '@game-lobby/shared':
         specifier: workspace:*
         version: link:../../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
+
+  packages/games/chess:
+    dependencies:
+      '@game-lobby/game-core':
+        specifier: workspace:*
+        version: link:../../game-core
+      '@game-lobby/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      chess.js:
+        specifier: ^1.0.0-beta.8
+        version: 1.4.0
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -1367,6 +1389,9 @@ packages:
   check-error@2.1.3:
     resolution: {integrity: sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA==}
     engines: {node: '>= 16'}
+
+  chess.js@1.4.0:
+    resolution: {integrity: sha512-BBJgrrtKQOzFLonR0l+k64A98NLemPwNsCskwb+29bRwobUa4iTm51E1kwGPbWXAcfdDa18nad6vpPPKPWarqw==}
 
   content-disposition@0.5.4:
     resolution: {integrity: sha512-FveZTNuGw04cxlAiWbzi6zTAL/lhehaWbTtgluJh4/E95DqMwTmha3KZN1aAWA8cFIhHzMZUvLevkw5Rqk+tSQ==}
@@ -3249,6 +3274,8 @@ snapshots:
       pathval: 2.0.1
 
   check-error@2.1.3: {}
+
+  chess.js@1.4.0: {}
 
   content-disposition@0.5.4:
     dependencies:

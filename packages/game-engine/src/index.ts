@@ -8,6 +8,7 @@ import type { HeartAttackGameState, HeartAttackStartOptions } from '@game-lobby/
 import type { WerewolfGameState, WerewolfStartOptions } from '@game-lobby/game-werewolf';
 import type { GomokuGameState, GomokuStartOptions } from '@game-lobby/game-gomoku';
 import type { GoGameState, GoStartOptions } from '@game-lobby/game-go';
+import type { ChessGameState, ChessStartOptions } from '@game-lobby/game-chess';
 import { getGameModule } from './registry.js';
 
 export type GameState =
@@ -18,7 +19,8 @@ export type GameState =
   | HeartAttackGameState
   | WerewolfGameState
   | GomokuGameState
-  | GoGameState;
+  | GoGameState
+  | ChessGameState;
 
 export type GameStartOptionsMap = {
   undercover: UndercoverStartOptions;
@@ -29,6 +31,7 @@ export type GameStartOptionsMap = {
   werewolf: WerewolfStartOptions;
   gomoku: GomokuStartOptions;
   go: GoStartOptions;
+  chess: ChessStartOptions;
 };
 
 export type GameStartOptions<T extends GameType = GameType> = GameStartOptionsMap[T];
@@ -265,3 +268,25 @@ export {
   type GoStartOptions,
   type BotGoAction,
 } from '@game-lobby/game-go';
+
+export {
+  createChessGame,
+  applyChessMove,
+  resignChessGame,
+  getCurrentPlayerId as getChessCurrentPlayerId,
+  getLegalMoves as getChessLegalMoves,
+  tickChessGame,
+  generateBotChessMove,
+  applyBotChessMove,
+  chessModule,
+  type ChessGameState,
+  type ChessPlayerState,
+  type ChessColor,
+  type ChessPhase,
+  type ChessPromotion,
+  type ChessEndReason,
+  type ChessLastMove,
+  type ChessMoveOption,
+  type ChessTimeSettings,
+  type ChessStartOptions,
+} from '@game-lobby/game-chess';

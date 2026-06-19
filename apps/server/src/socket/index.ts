@@ -10,6 +10,7 @@ import { registerAllGameSockets } from '../games/registry.js';
 import { startDrawGuessTimer } from '../games/draw-guess/socket.js';
 import { startActGuessTimer } from '../games/act-guess/socket.js';
 import { startGoTimer } from '../games/go/socket.js';
+import { startChessTimer } from '../games/chess/socket.js';
 import { resolveWordPool } from '../services/word-pack-service.js';
 import { resolvePairPool } from '../services/word-pair-service.js';
 import { parsePairLines } from '@game-lobby/word-pairs';
@@ -51,6 +52,7 @@ const startGameSchema = z
     mainTimeSec: z.number().int().min(60).max(3600).optional(),
     byoyomiSec: z.number().int().min(5).max(120).optional(),
     byoyomiPeriods: z.number().int().min(0).max(10).optional(),
+    incrementSec: z.number().int().min(0).max(60).optional(),
   })
   .optional();
 
@@ -436,6 +438,12 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
           byoyomiSec: data?.byoyomiSec ?? 30,
           byoyomiPeriods: data?.byoyomiPeriods ?? 3,
         };
+      } else if (gameType === 'chess') {
+        const data = parsedStart.success ? parsedStart.data : undefined;
+        startOptions = {
+          mainTimeSec: data?.mainTimeSec ?? 600,
+          incrementSec: data?.incrementSec ?? 5,
+        };
       }
 
       const result = await roomManager.startNextGame(roomId, hostMember.id, startOptions);
@@ -481,6 +489,12 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
     (roomId, state) => emitRoomIfGameEnded(io, roomManager, roomId, state),
   );
   startGoTimer(
+    io,
+    roomManager,
+    (roomId) => emitGameState(io, roomManager, roomId),
+    (roomId, state) => emitRoomIfGameEnded(io, roomManager, roomId, state),
+  );
+  startChessTimer(
     io,
     roomManager,
     (roomId) => emitGameState(io, roomManager, roomId),

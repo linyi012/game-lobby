@@ -16,6 +16,7 @@
     { "path": "../games/german-heart-attack" },
     { "path": "../games/gomoku" },
     { "path": "../games/go" },
+    { "path": "../games/chess" },
     { "path": "../games/werewolf" }
   ]
 }
