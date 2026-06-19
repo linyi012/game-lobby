@@ -23,4 +23,5 @@ export type GameStartOptionsPayload = {
   byoyomiSec?: number;
   byoyomiPeriods?: number;
   incrementSec?: number;
+  scriptId?: string;
 };

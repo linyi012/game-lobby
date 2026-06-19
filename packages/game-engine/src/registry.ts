@@ -9,6 +9,7 @@ import { werewolfModule } from '@game-lobby/game-werewolf';
 import { gomokuModule } from '@game-lobby/game-gomoku';
 import { goModule } from '@game-lobby/game-go';
 import { chessModule } from '@game-lobby/game-chess';
+import { scriptMurderModule } from '@game-lobby/game-script-murder';
 
 export const gameRegistry: Record<GameType, GameModule<unknown, unknown>> = {
   undercover: undercoverModule as GameModule<unknown, unknown>,
@@ -20,6 +21,7 @@ export const gameRegistry: Record<GameType, GameModule<unknown, unknown>> = {
   gomoku: gomokuModule as GameModule<unknown, unknown>,
   go: goModule as GameModule<unknown, unknown>,
   chess: chessModule as GameModule<unknown, unknown>,
+  script_murder: scriptMurderModule as GameModule<unknown, unknown>,
 };
 
 export function getGameModule(gameType: GameType): GameModule<unknown, unknown> {

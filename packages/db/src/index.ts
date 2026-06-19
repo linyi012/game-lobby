@@ -24,16 +24,46 @@ export async function createPgliteDb(): Promise<{
 }> {
   const { PGlite } = await import('@electric-sql/pglite');
   const { drizzle: drizzlePglite } = await import('drizzle-orm/pglite');
-  const { migrate } = await import('drizzle-orm/pglite/migrator');
+  const { createHash } = await import('node:crypto');
+  const { readFileSync } = await import('node:fs');
 
   const client = new PGlite();
   const db = drizzlePglite(client, { schema });
 
   const here = dirname(fileURLToPath(import.meta.url));
-  // src/index.ts (dev/tsx) and dist/index.js (build) both sit one level under
-  // the package root, where the generated drizzle migrations live.
   const migrationsFolder = resolve(here, '..', 'drizzle');
-  await migrate(db as unknown as Parameters<typeof migrate>[0], { migrationsFolder });
+
+  // PGlite cannot run multi-statement SQL via prepared queries (drizzle's default
+  // pglite migrator path). Use exec() per migration file instead.
+  await client.exec(`
+    CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+      id SERIAL PRIMARY KEY,
+      hash text NOT NULL,
+      created_at bigint
+    )
+  `);
+
+  const applied = await client.query<{ hash: string }>(
+    'SELECT hash FROM "__drizzle_migrations" ORDER BY created_at',
+  );
+  const appliedHashes = new Set(applied.rows.map((row) => row.hash));
+
+  const journalPath = resolve(migrationsFolder, 'meta', '_journal.json');
+  const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
+    entries: { tag: string; when: number }[];
+  };
+
+  for (const entry of journal.entries) {
+    const sqlPath = resolve(migrationsFolder, `${entry.tag}.sql`);
+    const sql = readFileSync(sqlPath, 'utf8');
+    const hash = createHash('sha256').update(sql).digest('hex');
+    if (appliedHashes.has(hash)) continue;
+    await client.exec(sql);
+    await client.query(
+      'INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ($1, $2)',
+      [hash, entry.when],
+    );
+  }
 
   return {
     db: db as unknown as Database,

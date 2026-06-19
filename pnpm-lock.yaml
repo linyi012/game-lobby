@@ -20,6 +20,9 @@ importers:
       '@game-lobby/game-engine':
         specifier: workspace:*
         version: link:../../packages/game-engine
+      '@game-lobby/script-murder-scripts':
+        specifier: workspace:*
+        version: link:../../packages/script-murder-scripts
       '@game-lobby/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -192,6 +195,9 @@ importers:
       '@game-lobby/game-gomoku':
         specifier: workspace:*
         version: link:../games/gomoku
+      '@game-lobby/game-script-murder':
+        specifier: workspace:*
+        version: link:../games/script-murder
       '@game-lobby/game-undercover':
         specifier: workspace:*
         version: link:../games/undercover
@@ -321,6 +327,25 @@ importers:
         specifier: ^3.0.5
         version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
 
+  packages/games/script-murder:
+    dependencies:
+      '@game-lobby/game-core':
+        specifier: workspace:*
+        version: link:../../game-core
+      '@game-lobby/script-murder-scripts':
+        specifier: workspace:*
+        version: link:../../script-murder-scripts
+      '@game-lobby/shared':
+        specifier: workspace:*
+        version: link:../../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
+
   packages/games/undercover:
     dependencies:
       '@game-lobby/game-core':
@@ -348,6 +373,19 @@ importers:
       '@game-lobby/shared':
         specifier: workspace:*
         version: link:../../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
+
+  packages/script-murder-scripts:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2

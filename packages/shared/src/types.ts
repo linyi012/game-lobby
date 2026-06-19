@@ -7,7 +7,8 @@ export type GameType =
   | 'werewolf'
   | 'gomoku'
   | 'go'
-  | 'chess';
+  | 'chess'
+  | 'script_murder';
 
 export type AiDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
@@ -72,6 +73,7 @@ export interface GameMetaEntry {
   requiresPerPlayerState: boolean;
   hasWordPacks?: boolean;
   hasPairPacks?: boolean;
+  hasScripts?: boolean;
 }
 
 export const GAME_META: Record<GameType, GameMetaEntry> = {
@@ -150,6 +152,15 @@ export const GAME_META: Record<GameType, GameMetaEntry> = {
     botsAllowed: true,
     requiresPerPlayerState: false,
   },
+  script_murder: {
+    name: '剧本杀',
+    minPlayers: 4,
+    maxPlayers: 8,
+    description: '按剧本扮演角色，搜证讨论并投票指认，房主可主持推进流程。',
+    botsAllowed: false,
+    requiresPerPlayerState: true,
+    hasScripts: true,
+  },
 };
 
 export const AI_DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
@@ -169,6 +180,7 @@ export const ALL_GAME_TYPES: GameType[] = [
   'gomoku',
   'go',
   'chess',
+  'script_murder',
 ];
 
 /** Tuple for Zod `z.enum()` — single source with ALL_GAME_TYPES */

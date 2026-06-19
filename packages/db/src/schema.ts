@@ -121,3 +121,16 @@ export const pairPackSyncRuns = pgTable('pair_pack_sync_runs', {
   error: text('error'),
   syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const scriptMurderScripts = pgTable('script_murder_scripts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 128 }).notNull(),
+  description: varchar('description', { length: 512 }).notNull().default(''),
+  minPlayers: integer('min_players').notNull().default(4),
+  maxPlayers: integer('max_players').notNull().default(8),
+  contentJson: text('content_json').notNull().default('{}'),
+  isOfficial: boolean('is_official').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

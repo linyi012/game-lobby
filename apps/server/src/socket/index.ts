@@ -13,6 +13,7 @@ import { startGoTimer } from '../games/go/socket.js';
 import { startChessTimer } from '../games/chess/socket.js';
 import { resolveWordPool } from '../services/word-pack-service.js';
 import { resolvePairPool } from '../services/word-pair-service.js';
+import { getScriptForGame } from '../services/script-murder-service.js';
 import { parsePairLines } from '@game-lobby/word-pairs';
 
 const joinSchema = z.object({ roomId: z.string().uuid() });
@@ -53,6 +54,7 @@ const startGameSchema = z
     byoyomiSec: z.number().int().min(5).max(120).optional(),
     byoyomiPeriods: z.number().int().min(0).max(10).optional(),
     incrementSec: z.number().int().min(0).max(60).optional(),
+    scriptId: z.string().uuid().optional(),
   })
   .optional();
 
@@ -443,6 +445,34 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
         startOptions = {
           mainTimeSec: data?.mainTimeSec ?? 600,
           incrementSec: data?.incrementSec ?? 5,
+        };
+      } else if (gameType === 'script_murder') {
+        const data = parsedStart.success ? parsedStart.data : undefined;
+        const scriptId = data?.scriptId;
+        if (!scriptId) {
+          cb?.({ ok: false, message: '请先选择剧本' });
+          return;
+        }
+        const script = await getScriptForGame(db, scriptId, user.id);
+        if (!script) {
+          cb?.({ ok: false, message: '剧本不存在或无权使用' });
+          return;
+        }
+        const activeCount = detail!.players.filter(
+          (p) => p.role === 'host' || p.role === 'player',
+        ).length;
+        if (script.content.characters.length !== activeCount) {
+          cb?.({
+            ok: false,
+            message: `该剧本需要 ${script.content.characters.length} 名玩家，当前 ${activeCount} 名`,
+          });
+          return;
+        }
+        startOptions = {
+          scriptId: script.id,
+          scriptTitle: script.title,
+          script: script.content,
+          hostMemberId: hostMember.id,
         };
       }
 

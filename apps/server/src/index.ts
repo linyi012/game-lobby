@@ -8,15 +8,17 @@ import { authRouter } from './routes/auth.js';
 import { roomsRouter } from './routes/rooms.js';
 import { wordPacksRouter } from './routes/word-packs.js';
 import { wordPairsRouter } from './routes/word-pairs.js';
+import { scriptMurderScriptsRouter } from './routes/script-murder-scripts.js';
 import { authMiddleware } from './middleware/auth.js';
 import { setupSocketHandlers } from './socket/index.js';
 import { RoomManager } from './services/room-manager.js';
 import { startGuestUserSweeper } from './services/guest-user-service.js';
 import { startWordPackSyncScheduler } from './services/word-pack-service.js';
 import { startPairPackSyncScheduler } from './services/word-pair-service.js';
+import { ensureOfficialScript } from './services/script-murder-service.js';
 
-const PORT = Number(process.env.PORT ?? 3001);
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:5273';
+const PORT = Number(process.env.PORT ?? 4123);
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:7125';
 const CORS_ORIGINS = CORS_ORIGIN.split(',').map((o) => o.trim());
 const corsOriginCheck = (
   origin: string | undefined,
@@ -63,6 +65,7 @@ app.use('/api/auth', authRouter(db));
 app.use('/api/rooms', authMiddleware, roomsRouter(db, roomManager));
 app.use('/api/word-packs', authMiddleware, wordPacksRouter(db));
 app.use('/api/word-pairs', authMiddleware, wordPairsRouter(db));
+app.use('/api/script-murder/scripts', authMiddleware, scriptMurderScriptsRouter(db));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -74,6 +77,7 @@ roomManager.startSweeper();
 startGuestUserSweeper(db);
 startWordPackSyncScheduler(db);
 startPairPackSyncScheduler(db);
+void ensureOfficialScript(db);
 
 httpServer.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);

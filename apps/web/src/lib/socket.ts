@@ -7,7 +7,7 @@ function resolveWsUrl(): string {
   const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
   if (envUrl !== undefined && envUrl !== '') return envUrl;
   if (typeof window !== 'undefined') return window.location.origin;
-  return 'http://localhost:3001';
+  return 'http://localhost:4123';
 }
 
 let socket: Socket | null = null;

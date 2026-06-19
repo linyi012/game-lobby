@@ -70,6 +70,13 @@ export function GameLobbyPage() {
                 <Link to="/games/undercover/word-pairs">管理词对包</Link>
               </>
             )}
+            {meta.hasScripts && (
+              <>
+                {' '}
+                ·{' '}
+                <Link to="/games/script_murder/scripts">管理剧本</Link>
+              </>
+            )}
           </p>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flex: '1 1 280px' }}>

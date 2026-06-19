@@ -8,6 +8,7 @@ import { registerWerewolfSockets } from './werewolf/socket.js';
 import { registerGomokuSockets } from './gomoku/socket.js';
 import { registerGoSockets } from './go/socket.js';
 import { registerChessSockets } from './chess/socket.js';
+import { registerScriptMurderSockets } from './script-murder/socket.js';
 import type { GameSocketDeps } from './undercover/socket.js';
 
 export type { GameSocketDeps };
@@ -25,4 +26,5 @@ export function registerAllGameSockets(
   registerGomokuSockets(socket, deps);
   registerGoSockets(socket, deps);
   registerChessSockets(socket, deps);
+  registerScriptMurderSockets(socket, deps);
 }

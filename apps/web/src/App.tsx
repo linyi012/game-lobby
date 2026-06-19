@@ -6,6 +6,8 @@ import { GameLobbyPage } from './pages/GameLobbyPage';
 import { RoomPage } from './pages/RoomPage';
 import { WordPackManagePage } from './games/draw-guess/WordPackManagePage';
 import { PairPackManagePage } from './games/undercover/PairPackManagePage';
+import { ScriptListPage } from './games/script-murder/ScriptListPage';
+import { ScriptEditorPage } from './games/script-murder/ScriptEditorPage';
 import { Layout } from './components/Layout';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -30,6 +32,8 @@ export function App() {
         <Route path="word-packs" element={<Navigate to="/games/draw_guess/word-packs" replace />} />
         <Route path="games/:gameType/word-packs" element={<WordPackManagePage />} />
         <Route path="games/undercover/word-pairs" element={<PairPackManagePage />} />
+        <Route path="games/script_murder/scripts" element={<ScriptListPage />} />
+        <Route path="games/script_murder/scripts/:id/edit" element={<ScriptEditorPage />} />
         <Route path="games/:gameType" element={<GameLobbyPage />} />
         <Route path="games/:gameType/room/:roomId" element={<RoomPage />} />
       </Route>

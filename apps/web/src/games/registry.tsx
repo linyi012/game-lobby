@@ -62,6 +62,18 @@ import { GoRoomSettings } from './go/RoomSettings';
 import { ChessGame } from './chess/ChessGame';
 import { emitChessMove, emitChessResign } from './chess/socket';
 import { ChessRoomSettings } from './chess/RoomSettings';
+import { ScriptMurderGame } from './script-murder/ScriptMurderGame';
+import {
+  emitScriptMurderContinue,
+  emitScriptMurderHostAdvance,
+  emitScriptMurderHostJumpAct,
+  emitScriptMurderHostPause,
+  emitScriptMurderHostRevealClue,
+  emitScriptMurderSearchClue,
+  emitScriptMurderSpeech,
+  emitScriptMurderVote,
+} from './script-murder/socket';
+import { ScriptMurderRoomSettings } from './script-murder/RoomSettings';
 
 export interface GameComponentProps {
   state: GameState;
@@ -78,6 +90,7 @@ export interface RoomSettingsProps {
   isIntermission: boolean;
   gameState: GameState | null;
   players?: { id: string; name: string; role: string }[];
+  activePlayerCount?: number;
   onStartOptionsChange: (options: Partial<GameStartOptionsPayload>) => void;
 }
 
@@ -225,6 +238,30 @@ function ChessGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps
   );
 }
 
+function ScriptMurderGameWrapper({
+  state,
+  myMemberId,
+  isSpectator,
+  isHost,
+}: GameComponentProps) {
+  return (
+    <ScriptMurderGame
+      state={state as import('@game-lobby/game-engine').ScriptMurderGameState}
+      myMemberId={myMemberId}
+      isSpectator={isSpectator}
+      isHost={isHost}
+      onSpeech={emitScriptMurderSpeech}
+      onVote={emitScriptMurderVote}
+      onSearchClue={emitScriptMurderSearchClue}
+      onHostAdvance={emitScriptMurderHostAdvance}
+      onHostRevealClue={emitScriptMurderHostRevealClue}
+      onHostPause={emitScriptMurderHostPause}
+      onHostJumpAct={emitScriptMurderHostJumpAct}
+      onContinue={emitScriptMurderContinue}
+    />
+  );
+}
+
 export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
   undercover: {
     Component: UndercoverGameWrapper,
@@ -269,6 +306,11 @@ export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
     Component: ChessGameWrapper,
     RoomSettings: ChessRoomSettings,
     isEnded: (state) => isGameEnded('chess', state as GameState),
+  },
+  script_murder: {
+    Component: ScriptMurderGameWrapper,
+    RoomSettings: ScriptMurderRoomSettings,
+    isEnded: (state) => isGameEnded('script_murder', state as GameState),
   },
 };
 

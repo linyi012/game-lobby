@@ -220,6 +220,7 @@ export function RoomPage() {
           name: p.displayName,
           role: p.role,
         })),
+        activePlayerCount: activeCount,
         onStartOptionsChange: handleStartOptionsChange,
       })}
 

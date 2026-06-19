@@ -17,6 +17,7 @@
     { "path": "../games/gomoku" },
     { "path": "../games/go" },
     { "path": "../games/chess" },
-    { "path": "../games/werewolf" }
+    { "path": "../games/werewolf" },
+    { "path": "../games/script-murder" }
   ]
 }

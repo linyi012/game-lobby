@@ -9,6 +9,7 @@ import type { WerewolfGameState, WerewolfStartOptions } from '@game-lobby/game-w
 import type { GomokuGameState, GomokuStartOptions } from '@game-lobby/game-gomoku';
 import type { GoGameState, GoStartOptions } from '@game-lobby/game-go';
 import type { ChessGameState, ChessStartOptions } from '@game-lobby/game-chess';
+import type { ScriptMurderGameState, ScriptMurderStartOptions } from '@game-lobby/game-script-murder';
 import { getGameModule } from './registry.js';
 
 export type GameState =
@@ -20,7 +21,8 @@ export type GameState =
   | WerewolfGameState
   | GomokuGameState
   | GoGameState
-  | ChessGameState;
+  | ChessGameState
+  | ScriptMurderGameState;
 
 export type GameStartOptionsMap = {
   undercover: UndercoverStartOptions;
@@ -32,6 +34,7 @@ export type GameStartOptionsMap = {
   gomoku: GomokuStartOptions;
   go: GoStartOptions;
   chess: ChessStartOptions;
+  script_murder: ScriptMurderStartOptions;
 };
 
 export type GameStartOptions<T extends GameType = GameType> = GameStartOptionsMap[T];
@@ -290,3 +293,24 @@ export {
   type ChessTimeSettings,
   type ChessStartOptions,
 } from '@game-lobby/game-chess';
+
+export {
+  createScriptMurderGame,
+  sendSpeech as sendScriptMurderSpeech,
+  submitVote as submitScriptMurderVote,
+  discoverClue,
+  hostAdvancePhase,
+  hostRevealClue,
+  hostPause,
+  hostJumpAct,
+  advanceFromReveal as advanceScriptMurderFromReveal,
+  advancePhaseOnTimeout as advanceScriptMurderPhaseOnTimeout,
+  redactScriptMurderState,
+  getVisibleClues,
+  scriptMurderModule,
+  type ScriptMurderGameState,
+  type ScriptMurderPlayerState,
+  type ScriptMurderStartOptions,
+  type ScriptPhaseType,
+  type SpeechMessage as ScriptMurderSpeechMessage,
+} from '@game-lobby/game-script-murder';

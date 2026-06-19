@@ -193,3 +193,107 @@ export function parsePairLines(text: string): [string, string][] {
   }
   return pairs;
 }
+
+export interface MurderScriptSummary {
+  id: string;
+  title: string;
+  description: string;
+  minPlayers: number;
+  maxPlayers: number;
+  characterCount: number;
+  actCount: number;
+  isOfficial: boolean;
+  ownerUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MurderScriptAct {
+  order: number;
+  title: string;
+  publicText: string;
+  phases: ('intro' | 'reading' | 'discussion' | 'search' | 'vote' | 'reveal')[];
+  autoAdvanceSec?: number;
+}
+
+export interface MurderScriptCharacter {
+  id: string;
+  name: string;
+  publicProfile: string;
+  privateScript: string;
+  objectives: string;
+}
+
+export interface MurderScriptClue {
+  id: string;
+  title: string;
+  content: string;
+  revealAct: number;
+  visibility: 'public' | 'character' | 'search';
+  characterId?: string;
+}
+
+export interface MurderScriptContent {
+  acts: MurderScriptAct[];
+  characters: MurderScriptCharacter[];
+  clues: MurderScriptClue[];
+}
+
+export interface MurderScriptDetail extends MurderScriptSummary {
+  content: MurderScriptContent;
+}
+
+export function fetchMyMurderScripts(token: string) {
+  return request<MurderScriptSummary[]>('/api/script-murder/scripts/mine', {}, token);
+}
+
+export function fetchOfficialMurderScripts(token: string) {
+  return request<MurderScriptSummary[]>('/api/script-murder/scripts/official', {}, token);
+}
+
+export function fetchPlayableMurderScripts(token: string) {
+  return request<MurderScriptSummary[]>('/api/script-murder/scripts/playable', {}, token);
+}
+
+export function fetchMurderScript(token: string, id: string) {
+  return request<MurderScriptDetail>(`/api/script-murder/scripts/${id}`, {}, token);
+}
+
+export function createMurderScript(
+  token: string,
+  body: {
+    title: string;
+    description: string;
+    minPlayers: number;
+    maxPlayers: number;
+    content: MurderScriptContent;
+  },
+) {
+  return request<MurderScriptDetail>(
+    '/api/script-murder/scripts',
+    { method: 'POST', body: JSON.stringify(body) },
+    token,
+  );
+}
+
+export function updateMurderScript(
+  token: string,
+  id: string,
+  body: {
+    title: string;
+    description: string;
+    minPlayers: number;
+    maxPlayers: number;
+    content: MurderScriptContent;
+  },
+) {
+  return request<MurderScriptDetail>(
+    `/api/script-murder/scripts/${id}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
+    token,
+  );
+}
+
+export function deleteMurderScript(token: string, id: string) {
+  return request<{ ok: boolean }>(`/api/script-murder/scripts/${id}`, { method: 'DELETE' }, token);
+}
