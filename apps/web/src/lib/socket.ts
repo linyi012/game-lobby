@@ -110,7 +110,10 @@ export function emitStartGame(
     userPairPackIds?: string[];
     roomExtraWords?: string | string[];
     drawDurationSec?: number;
+    performDurationSec?: number;
     wordSelectDurationSec?: number;
+    enableTeams?: boolean;
+    teamAssignments?: Record<string, import('@game-lobby/game-engine').ActGuessTeamId>;
     useSpecialCards?: boolean;
     rolePreset?: RolePresetId;
     customRoles?: WerewolfRole[];
@@ -144,6 +147,21 @@ export function emitStartGame(
         roomExtraWords: extra ?? [],
         drawDurationSec: options.drawDurationSec,
         wordSelectDurationSec: options.wordSelectDurationSec,
+      };
+    } else if (gameType === 'act_guess') {
+      const rawExtra = options.roomExtraWords;
+      const extra = (typeof rawExtra === 'string' ? rawExtra : (rawExtra ?? []).join('\n'))
+        .split(/[,，\n]/)
+        .map((w) => w.trim())
+        .filter(Boolean);
+      payload = {
+        categoryIds: options.categoryIds ?? ['animal', 'daily', 'movie', 'sport'],
+        userPackIds: options.userPackIds ?? [],
+        roomExtraWords: extra ?? [],
+        performDurationSec: options.performDurationSec,
+        wordSelectDurationSec: options.wordSelectDurationSec,
+        enableTeams: options.enableTeams ?? false,
+        teamAssignments: options.teamAssignments,
       };
     } else if (gameType === 'german_heart_attack') {
       payload = {

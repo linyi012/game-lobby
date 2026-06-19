@@ -2,6 +2,7 @@ import type { Socket } from 'socket.io';
 import { registerUndercoverSockets } from './undercover/socket.js';
 import { registerDaVinciSockets } from './da-vinci-code/socket.js';
 import { registerDrawGuessSockets } from './draw-guess/socket.js';
+import { registerActGuessSockets } from './act-guess/socket.js';
 import { registerHeartAttackSockets } from './german-heart-attack/socket.js';
 import { registerWerewolfSockets } from './werewolf/socket.js';
 import { registerGomokuSockets } from './gomoku/socket.js';
@@ -17,6 +18,7 @@ export function registerAllGameSockets(
   registerUndercoverSockets(socket, deps);
   registerDaVinciSockets(socket, deps);
   registerDrawGuessSockets(socket, deps);
+  registerActGuessSockets(socket, deps);
   registerHeartAttackSockets(socket, deps);
   registerWerewolfSockets(socket, deps);
   registerGomokuSockets(socket, deps);

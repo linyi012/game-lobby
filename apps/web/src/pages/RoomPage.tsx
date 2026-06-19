@@ -215,6 +215,11 @@ export function RoomPage() {
         isPlaying,
         isIntermission,
         gameState: gameState as import('@game-lobby/game-engine').GameState | null,
+        players: room.players.map((p) => ({
+          id: p.id,
+          name: p.displayName,
+          role: p.role,
+        })),
         onStartOptionsChange: handleStartOptionsChange,
       })}
 

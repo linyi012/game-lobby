@@ -29,6 +29,9 @@ import {
   emitRevealChar,
 } from './draw-guess/socket';
 import { DrawGuessRoomSettings } from './draw-guess/RoomSettings';
+import { ActGuessGame } from './act-guess/ActGuessGame';
+import { emitSelectWord as emitActGuessSelectWord, emitGuess as emitActGuessGuess, emitPass as emitActGuessPass, emitConfirmCorrect as emitActGuessConfirmCorrect } from './act-guess/socket';
+import { ActGuessRoomSettings } from './act-guess/RoomSettings';
 import { HeartAttackGame } from './german-heart-attack/HeartAttackGame';
 import {
   emitHeartAttackFlip,
@@ -71,6 +74,7 @@ export interface RoomSettingsProps {
   isPlaying: boolean;
   isIntermission: boolean;
   gameState: GameState | null;
+  players?: { id: string; name: string; role: string }[];
   onStartOptionsChange: (options: Partial<GameStartOptionsPayload>) => void;
 }
 
@@ -130,6 +134,20 @@ function DrawGuessGameWrapper({ state, myMemberId, isSpectator }: GameComponentP
       onGuess={emitGuess}
       onPainterHint={emitPainterHint}
       onRevealChar={emitRevealChar}
+    />
+  );
+}
+
+function ActGuessGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps) {
+  return (
+    <ActGuessGame
+      state={state as import('@game-lobby/game-engine').ActGuessGameState}
+      myMemberId={myMemberId}
+      isSpectator={isSpectator}
+      onSelectWord={emitActGuessSelectWord}
+      onGuess={emitActGuessGuess}
+      onPass={emitActGuessPass}
+      onConfirmCorrect={emitActGuessConfirmCorrect}
     />
   );
 }
@@ -207,6 +225,11 @@ export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
     Component: DrawGuessGameWrapper,
     RoomSettings: DrawGuessRoomSettings,
     isEnded: (state) => isGameEnded('draw_guess', state as GameState),
+  },
+  act_guess: {
+    Component: ActGuessGameWrapper,
+    RoomSettings: ActGuessRoomSettings,
+    isEnded: (state) => isGameEnded('act_guess', state as GameState),
   },
   german_heart_attack: {
     Component: HeartAttackGameWrapper,

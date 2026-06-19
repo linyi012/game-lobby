@@ -1,4 +1,4 @@
-import type { RolePresetId, WerewolfRole } from '@game-lobby/game-engine';
+import type { ActGuessTeamId, RolePresetId, WerewolfRole } from '@game-lobby/game-engine';
 
 /** Options collected from per-game RoomSettings before `game:start`. */
 export type GameStartOptionsPayload = {
@@ -9,7 +9,10 @@ export type GameStartOptionsPayload = {
   userPairPackIds?: string[];
   roomExtraWords?: string;
   drawDurationSec?: number;
+  performDurationSec?: number;
   wordSelectDurationSec?: number;
+  enableTeams?: boolean;
+  teamAssignments?: Record<string, ActGuessTeamId>;
   useSpecialCards?: boolean;
   rolePreset?: RolePresetId;
   customRoles?: WerewolfRole[];

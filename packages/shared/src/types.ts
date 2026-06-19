@@ -2,6 +2,7 @@ export type GameType =
   | 'undercover'
   | 'da_vinci_code'
   | 'draw_guess'
+  | 'act_guess'
   | 'german_heart_attack'
   | 'werewolf'
   | 'gomoku'
@@ -99,6 +100,15 @@ export const GAME_META: Record<GameType, GameMetaEntry> = {
     requiresPerPlayerState: true,
     hasWordPacks: true,
   },
+  act_guess: {
+    name: '你比画我猜',
+    minPlayers: 2,
+    maxPlayers: 12,
+    description: '轮流用肢体比划词语，队友在聊天中猜词；可选分队，对方可见词语监督公平。',
+    botsAllowed: false,
+    requiresPerPlayerState: true,
+    hasWordPacks: true,
+  },
   german_heart_attack: {
     name: '德国心脏病',
     minPlayers: 2,
@@ -144,6 +154,7 @@ export const ALL_GAME_TYPES: GameType[] = [
   'undercover',
   'da_vinci_code',
   'draw_guess',
+  'act_guess',
   'german_heart_attack',
   'werewolf',
   'gomoku',

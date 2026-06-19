@@ -3,6 +3,7 @@ import type { GameParticipant } from '@game-lobby/game-core';
 import type { UndercoverGameState, UndercoverStartOptions } from '@game-lobby/game-undercover';
 import type { DaVinciGameState, DaVinciStartOptions } from '@game-lobby/game-da-vinci-code';
 import type { DrawGuessGameState, DrawGuessStartOptions } from '@game-lobby/game-draw-guess';
+import type { ActGuessGameState, ActGuessStartOptions } from '@game-lobby/game-act-guess';
 import type { HeartAttackGameState, HeartAttackStartOptions } from '@game-lobby/game-german-heart-attack';
 import type { WerewolfGameState, WerewolfStartOptions } from '@game-lobby/game-werewolf';
 import type { GomokuGameState, GomokuStartOptions } from '@game-lobby/game-gomoku';
@@ -13,6 +14,7 @@ export type GameState =
   | UndercoverGameState
   | DaVinciGameState
   | DrawGuessGameState
+  | ActGuessGameState
   | HeartAttackGameState
   | WerewolfGameState
   | GomokuGameState
@@ -22,6 +24,7 @@ export type GameStartOptionsMap = {
   undercover: UndercoverStartOptions;
   da_vinci_code: DaVinciStartOptions;
   draw_guess: DrawGuessStartOptions;
+  act_guess: ActGuessStartOptions;
   german_heart_attack: HeartAttackStartOptions;
   werewolf: WerewolfStartOptions;
   gomoku: GomokuStartOptions;
@@ -131,6 +134,27 @@ export {
   type WordSourceSnapshot,
   type DrawGuessStartOptions,
 } from '@game-lobby/game-draw-guess';
+
+export {
+  createActGuessGame,
+  selectWord as selectActGuessWord,
+  tickActGuess,
+  submitGuess as submitActGuess,
+  performerPass as actGuessPerformerPass,
+  performerConfirmCorrect as actGuessPerformerConfirmCorrect,
+  redactActGuessState,
+  canPlayerGuess,
+  canPlayerSeeWord,
+  getConfirmableGuessers,
+  getPlayerTeam,
+  actGuessModule,
+  type ActGuessGameState,
+  type ActGuessPhase,
+  type ActGuessPlayerState,
+  type ActGuessTeamId,
+  type ActGuessTeams,
+  type ActGuessStartOptions,
+} from '@game-lobby/game-act-guess';
 
 export {
   createHeartAttackGame,

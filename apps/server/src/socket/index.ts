@@ -8,6 +8,7 @@ import type { AiDifficulty, GameType } from '@game-lobby/shared';
 import { ALL_GAME_TYPES, GAME_META, GAME_TYPE_ZOD_VALUES } from '@game-lobby/shared';
 import { registerAllGameSockets } from '../games/registry.js';
 import { startDrawGuessTimer } from '../games/draw-guess/socket.js';
+import { startActGuessTimer } from '../games/act-guess/socket.js';
 import { startGoTimer } from '../games/go/socket.js';
 import { resolveWordPool } from '../services/word-pack-service.js';
 import { resolvePairPool } from '../services/word-pair-service.js';
@@ -33,7 +34,10 @@ const startGameSchema = z
       .array(z.tuple([z.string().min(1).max(32), z.string().min(1).max(32)]))
       .optional(),
     drawDurationSec: z.number().int().min(30).max(300).optional(),
+    performDurationSec: z.number().int().min(30).max(300).optional(),
     wordSelectDurationSec: z.number().int().min(5).max(60).optional(),
+    enableTeams: z.boolean().optional(),
+    teamAssignments: z.record(z.enum(['A', 'B'])).optional(),
     useSpecialCards: z.boolean().optional(),
     rolePreset: z.enum(['simple_6', 'standard_9', 'classic_12', 'custom']).optional(),
     customRoles: z
@@ -354,6 +358,62 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
             isSpectator: p.role === 'spectator',
           })),
         };
+      } else if (gameType === 'act_guess') {
+        const data = parsedStart.success ? parsedStart.data : undefined;
+        const categoryIds = data?.categoryIds ?? ['animal', 'daily', 'movie', 'sport'];
+        const userPackIds = data?.userPackIds ?? [];
+        const roomExtraWords = data?.roomExtraWords ?? [];
+        const wordPool = await resolveWordPool(db, {
+          categoryIds,
+          userPackIds,
+          roomExtraWords,
+        });
+        if (wordPool.length < 3) {
+          cb?.({ ok: false, message: '词语池不足，请至少选择包含 3 个词的分类或词库' });
+          return;
+        }
+
+        const enableTeams = data?.enableTeams ?? false;
+        const activePlayers = detail!.players.filter((p) => p.role !== 'spectator');
+        let teamAssignments = data?.teamAssignments;
+
+        if (enableTeams) {
+          if (activePlayers.length < 4) {
+            cb?.({ ok: false, message: '分队模式至少需要 4 名玩家' });
+            return;
+          }
+          if (!teamAssignments) {
+            cb?.({ ok: false, message: '请为所有玩家分配队伍' });
+            return;
+          }
+          const teamA = activePlayers.filter((p) => teamAssignments![p.id] === 'A');
+          const teamB = activePlayers.filter((p) => teamAssignments![p.id] === 'B');
+          const unassigned = activePlayers.filter((p) => !teamAssignments![p.id]);
+          if (unassigned.length > 0) {
+            cb?.({ ok: false, message: '请为所有玩家分配队伍' });
+            return;
+          }
+          if (teamA.length < 1 || teamB.length < 1) {
+            cb?.({ ok: false, message: '每队至少需要 1 名玩家' });
+            return;
+          }
+        }
+
+        startOptions = {
+          categoryIds,
+          userPackIds,
+          roomExtraWords,
+          performDurationSec: data?.performDurationSec ?? 60,
+          wordSelectDurationSec: data?.wordSelectDurationSec ?? 10,
+          wordPool,
+          enableTeams,
+          teamAssignments: enableTeams ? teamAssignments : undefined,
+          allPlayers: detail!.players.map((p) => ({
+            id: p.id,
+            name: p.displayName,
+            isSpectator: p.role === 'spectator',
+          })),
+        };
       } else if (gameType === 'german_heart_attack') {
         startOptions = {
           useSpecialCards: parsedStart.success
@@ -409,6 +469,12 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
   });
 
   startDrawGuessTimer(
+    io,
+    roomManager,
+    (roomId) => emitGameState(io, roomManager, roomId),
+    (roomId, state) => emitRoomIfGameEnded(io, roomManager, roomId, state),
+  );
+  startActGuessTimer(
     io,
     roomManager,
     (roomId) => emitGameState(io, roomManager, roomId),

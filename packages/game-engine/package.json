@@ -19,6 +19,7 @@
     "@game-lobby/game-core": "workspace:*",
     "@game-lobby/game-da-vinci-code": "workspace:*",
     "@game-lobby/game-draw-guess": "workspace:*",
+    "@game-lobby/game-act-guess": "workspace:*",
     "@game-lobby/game-german-heart-attack": "workspace:*",
     "@game-lobby/game-gomoku": "workspace:*",
     "@game-lobby/game-go": "workspace:*",
