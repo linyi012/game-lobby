@@ -18,6 +18,7 @@
     { "path": "../games/go" },
     { "path": "../games/chess" },
     { "path": "../games/werewolf" },
-    { "path": "../games/script-murder" }
+    { "path": "../games/script-murder" },
+    { "path": "../games/lifeboat" }
   ]
 }

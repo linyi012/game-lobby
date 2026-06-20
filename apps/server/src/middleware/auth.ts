@@ -1,5 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { eq } from 'drizzle-orm';
+import type { Database } from '@game-lobby/db';
+import { users } from '@game-lobby/db';
 import type { UserProfile } from '@game-lobby/shared';
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-change-me';
@@ -46,17 +49,43 @@ export function verifyToken(token: string): UserProfile | null {
 }
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) {
-    res.status(401).json({ message: '未登录' });
-    return;
-  }
-  const token = header.slice(7);
-  const user = verifyToken(token);
+  const user = authenticateRequest(req);
   if (!user) {
     res.status(401).json({ message: '登录已过期' });
     return;
   }
   req.user = user;
   next();
+}
+
+export function createAuthMiddleware(db: Database) {
+  return async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const user = authenticateRequest(req);
+    if (!user) {
+      res.status(401).json({ message: '登录已过期' });
+      return;
+    }
+
+    const [row] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
+    if (!row) {
+      res.status(401).json({ message: '登录已过期' });
+      return;
+    }
+
+    req.user = user;
+    next();
+  };
+}
+
+function authenticateRequest(req: AuthRequest): UserProfile | null {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    return null;
+  }
+  return verifyToken(header.slice(7));
 }

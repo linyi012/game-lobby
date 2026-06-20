@@ -198,9 +198,15 @@ importers:
       '@game-lobby/game-go':
         specifier: workspace:*
         version: link:../games/go
+      '@game-lobby/game-gold-miner':
+        specifier: workspace:*
+        version: link:../games/gold-miner
       '@game-lobby/game-gomoku':
         specifier: workspace:*
         version: link:../games/gomoku
+      '@game-lobby/game-lifeboat':
+        specifier: workspace:*
+        version: link:../games/lifeboat
       '@game-lobby/game-script-murder':
         specifier: workspace:*
         version: link:../games/script-murder
@@ -349,7 +355,39 @@ importers:
         specifier: ^3.0.5
         version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
 
+  packages/games/gold-miner:
+    dependencies:
+      '@game-lobby/game-core':
+        specifier: workspace:*
+        version: link:../../game-core
+      '@game-lobby/shared':
+        specifier: workspace:*
+        version: link:../../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
+
   packages/games/gomoku:
+    dependencies:
+      '@game-lobby/game-core':
+        specifier: workspace:*
+        version: link:../../game-core
+      '@game-lobby/shared':
+        specifier: workspace:*
+        version: link:../../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
+
+  packages/games/lifeboat:
     dependencies:
       '@game-lobby/game-core':
         specifier: workspace:*

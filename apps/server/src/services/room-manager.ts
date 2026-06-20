@@ -421,7 +421,15 @@ export class RoomManager {
     const waiting = await this.assertWaitingRoom(roomId);
     if (!waiting.ok) return { error: waiting.message };
 
+    const meta = GAME_META[detail.gameType];
+    if (!meta.botsAllowed) {
+      return { error: '该游戏不支持电脑玩家' };
+    }
+
     const mod = getGameModule(detail.gameType);
+    if (!mod) {
+      return { error: '不支持的游戏类型' };
+    }
     const canAdd = mod.canAddBot ?? defaultCanAddBot;
     const check = canAdd(detail);
     if (check !== true) return { error: check.message };

@@ -84,6 +84,24 @@ import {
   emitChineseChessRespondDraw,
 } from './chinese-chess/socket';
 import { ChineseChessRoomSettings } from './chinese-chess/RoomSettings';
+import { GoldMinerGame } from './gold-miner/GoldMinerGame';
+import {
+  emitGoldMinerLaunch,
+  emitGoldMinerShopBuy,
+  emitGoldMinerShopDone,
+  emitGoldMinerUseDynamite,
+} from './gold-miner/socket';
+import { GoldMinerRoomSettings } from './gold-miner/RoomSettings';
+import { LifeboatGame } from './lifeboat/LifeboatGame';
+import {
+  emitLifeboatAction,
+  emitLifeboatCombatSupport,
+  emitLifeboatNavigationPick,
+  emitLifeboatPlaySupply,
+  emitLifeboatRespond,
+  emitLifeboatSkipThirst,
+  emitLifeboatSupplyPick,
+} from './lifeboat/socket';
 
 export interface GameComponentProps {
   state: GameState;
@@ -296,6 +314,37 @@ function ChineseChessGameWrapper({ state, myMemberId, isSpectator }: GameCompone
   );
 }
 
+function GoldMinerGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps) {
+  return (
+    <GoldMinerGame
+      state={state as import('@game-lobby/game-engine').GoldMinerGameState}
+      myMemberId={myMemberId}
+      isSpectator={isSpectator}
+      onLaunch={emitGoldMinerLaunch}
+      onUseDynamite={emitGoldMinerUseDynamite}
+      onShopBuy={emitGoldMinerShopBuy}
+      onShopDone={emitGoldMinerShopDone}
+    />
+  );
+}
+
+function LifeboatGameWrapper({ state, myMemberId, isSpectator }: GameComponentProps) {
+  return (
+    <LifeboatGame
+      state={state as import('@game-lobby/game-engine').LifeboatGameState}
+      myMemberId={myMemberId}
+      isSpectator={isSpectator}
+      onSupplyPick={emitLifeboatSupplyPick}
+      onAction={emitLifeboatAction}
+      onRespond={emitLifeboatRespond}
+      onCombatSupport={emitLifeboatCombatSupport}
+      onNavigationPick={emitLifeboatNavigationPick}
+      onPlayWater={(cardId) => emitLifeboatPlaySupply(cardId, 'thirst')}
+      onSkipThirst={emitLifeboatSkipThirst}
+    />
+  );
+}
+
 export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
   undercover: {
     Component: UndercoverGameWrapper,
@@ -355,6 +404,15 @@ export const GAME_REGISTRY: Record<GameType, WebGameModule> = {
     Component: ChineseChessGameWrapper,
     RoomSettings: ChineseChessRoomSettings,
     isEnded: (state) => isGameEnded('chinese_chess', state as GameState),
+  },
+  gold_miner: {
+    Component: GoldMinerGameWrapper,
+    RoomSettings: GoldMinerRoomSettings,
+    isEnded: (state) => isGameEnded('gold_miner', state as GameState),
+  },
+  lifeboat: {
+    Component: LifeboatGameWrapper,
+    isEnded: (state) => isGameEnded('lifeboat', state as GameState),
   },
 };
 

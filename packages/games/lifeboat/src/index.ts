@@ -1,0 +1,31 @@
+export {
+  createLifeboatGame,
+  pickSupply,
+  submitAction,
+  respondToRequest,
+  submitCombatSupport,
+  resolveCombat,
+  autoResolveCombatIfReady,
+  pickNavigation,
+  playSupplyForThirst,
+  skipThirst,
+  redactLifeboatState,
+  supplyCardLabel,
+  SUPPLY_LABELS,
+  CHARACTER_LABELS,
+  type LifeboatGameState,
+  type LifeboatPlayerState,
+  type LifeboatPhase,
+  type LifeboatActionType,
+  type LifeboatActionPayload,
+  type LifeboatStartOptions,
+  type LifeboatLastAction,
+  type LifeboatScoreEntry,
+  type CombatSide,
+  type SupplyDraftState,
+  type PendingRequest,
+  type CombatState,
+} from './logic.js';
+export { lifeboatModule, type LifeboatStartOptions as LifeboatModuleStartOptions } from './module.js';
+export { ALL_CHARACTERS, CHARACTER_BY_ID, type CharacterId } from './characters.js';
+export { buildSupplyDeck, buildNavigationDeck, type SupplyCard, type NavigationCard, type SupplyKind } from './cards.js';

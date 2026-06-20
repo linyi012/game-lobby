@@ -19,8 +19,13 @@ export function LoginPage() {
     api.fetchRandomGuestName().then((res) => setGuestName(res.displayName)).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (token) {
+      navigate('/', { replace: true });
+    }
+  }, [token, navigate]);
+
   if (token) {
-    navigate('/');
     return null;
   }
 

@@ -11,6 +11,8 @@ import { registerChessSockets } from './chess/socket.js';
 import { registerScriptMurderSockets } from './script-murder/socket.js';
 import { registerDwarfMineSockets } from './dwarf-mine/socket.js';
 import { registerChineseChessSockets } from './chinese-chess/socket.js';
+import { registerGoldMinerSockets } from './gold-miner/socket.js';
+import { registerLifeboatSockets } from './lifeboat/socket.js';
 import type { GameSocketDeps } from './undercover/socket.js';
 
 export type { GameSocketDeps };
@@ -31,4 +33,6 @@ export function registerAllGameSockets(
   registerScriptMurderSockets(socket, deps);
   registerDwarfMineSockets(socket, deps);
   registerChineseChessSockets(socket, deps);
+  registerGoldMinerSockets(socket, deps);
+  registerLifeboatSockets(socket, deps);
 }

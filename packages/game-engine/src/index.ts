@@ -12,6 +12,8 @@ import type { ChessGameState, ChessStartOptions } from '@game-lobby/game-chess';
 import type { ScriptMurderGameState, ScriptMurderStartOptions } from '@game-lobby/game-script-murder';
 import type { DwarfMineGameState, DwarfMineStartOptions } from '@game-lobby/game-dwarf-mine';
 import type { ChineseChessGameState, ChineseChessStartOptions } from '@game-lobby/game-chinese-chess';
+import type { GoldMinerGameState, GoldMinerStartOptions } from '@game-lobby/game-gold-miner';
+import type { LifeboatGameState, LifeboatStartOptions } from '@game-lobby/game-lifeboat';
 import { getGameModule } from './registry.js';
 
 export type GameState =
@@ -26,7 +28,9 @@ export type GameState =
   | ChessGameState
   | ScriptMurderGameState
   | DwarfMineGameState
-  | ChineseChessGameState;
+  | ChineseChessGameState
+  | GoldMinerGameState
+  | LifeboatGameState;
 
 export type GameStartOptionsMap = {
   undercover: UndercoverStartOptions;
@@ -41,6 +45,8 @@ export type GameStartOptionsMap = {
   script_murder: ScriptMurderStartOptions;
   dwarf_mine: DwarfMineStartOptions;
   chinese_chess: ChineseChessStartOptions;
+  gold_miner: GoldMinerStartOptions;
+  lifeboat: LifeboatStartOptions;
 };
 
 export type GameStartOptions<T extends GameType = GameType> = GameStartOptionsMap[T];
@@ -378,3 +384,64 @@ export {
   type ChineseChessTimeSettings,
   type ChineseChessStartOptions,
 } from '@game-lobby/game-chinese-chess';
+
+export {
+  createGoldMinerGame,
+  tickGoldMiner,
+  launchHook,
+  useDynamite,
+  buyShopItem,
+  skipShop,
+  computeSwingAngle,
+  hookTip,
+  generateBotLaunch,
+  generateBotShop,
+  generateBotDynamite,
+  scoreItemAtAngle,
+  SHOP_PRICES,
+  ITEM_LABELS,
+  FIELD_WIDTH,
+  FIELD_HEIGHT,
+  MINER_X,
+  MINER_Y,
+  goldMinerModule,
+  type GoldMinerGameState,
+  type GoldMinerPlayerState,
+  type GoldMinerPhase,
+  type HookStage,
+  type ItemType,
+  type ShopItemType,
+  type MineItem,
+  type GoldMinerHookState,
+  type GoldMinerLastGrab,
+  type GoldMinerInventory,
+  type GoldMinerStartOptions,
+} from '@game-lobby/game-gold-miner';
+
+export {
+  createLifeboatGame,
+  pickSupply,
+  submitAction,
+  respondToRequest,
+  submitCombatSupport,
+  resolveCombat,
+  pickNavigation,
+  playSupplyForThirst,
+  skipThirst,
+  redactLifeboatState,
+  supplyCardLabel,
+  SUPPLY_LABELS,
+  CHARACTER_LABELS,
+  lifeboatModule,
+  type LifeboatGameState,
+  type LifeboatPlayerState,
+  type LifeboatPhase,
+  type LifeboatActionType,
+  type LifeboatActionPayload,
+  type LifeboatStartOptions,
+  type LifeboatScoreEntry,
+  type CombatSide,
+  type CharacterId,
+  ALL_CHARACTERS,
+  CHARACTER_BY_ID,
+} from '@game-lobby/game-lifeboat';

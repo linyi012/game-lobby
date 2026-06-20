@@ -1,6 +1,8 @@
 import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
 import type { Database } from '@game-lobby/db';
+import { users } from '@game-lobby/db';
 import { verifyToken } from '../middleware/auth.js';
 import type { RoomCloseReason, RoomManager } from '../services/room-manager.js';
 import { projectGameState, type GameState, type UndercoverGameState } from '@game-lobby/game-engine';
@@ -12,6 +14,7 @@ import { startActGuessTimer } from '../games/act-guess/socket.js';
 import { startGoTimer } from '../games/go/socket.js';
 import { startChessTimer } from '../games/chess/socket.js';
 import { startChineseChessTimer } from '../games/chinese-chess/socket.js';
+import { startGoldMinerTimer } from '../games/gold-miner/socket.js';
 import { resolveWordPool } from '../services/word-pack-service.js';
 import { resolvePairPool } from '../services/word-pair-service.js';
 import { getScriptForGame } from '../services/script-murder-service.js';
@@ -58,6 +61,9 @@ const startGameSchema = z
     scriptId: z.string().uuid().optional(),
     dwarfMineMode: z.enum(['base', 'expansion']).optional(),
     unlimitedTime: z.boolean().optional(),
+    maxLevels: z.number().int().min(3).max(10).optional(),
+    levelTimeLimitSec: z.number().int().min(30).max(300).optional(),
+    enableMovingPig: z.boolean().optional(),
   })
   .optional();
 
@@ -67,7 +73,7 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
     await broadcastLobbyRooms(io, roomManager);
   });
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth.token as string | undefined;
     if (!token) {
       next(new Error('未授权'));
@@ -78,6 +84,18 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       next(new Error('登录已过期'));
       return;
     }
+
+    const [row] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
+    if (!row) {
+      next(new Error('登录已过期'));
+      return;
+    }
+
     socket.data.user = user;
     next();
   });
@@ -221,7 +239,11 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       }
 
       const member = await findMember(roomManager, roomId, user.id);
-      const detail = await roomManager.addBot(roomId, parsed.data.difficulty as AiDifficulty, member?.id ?? '');
+      if (!member) {
+        cb?.({ ok: false, message: '请先加入房间' });
+        return;
+      }
+      const detail = await roomManager.addBot(roomId, parsed.data.difficulty as AiDifficulty, member.id);
       if (!detail) {
         cb?.({ ok: false, message: '无法添加电脑' });
         return;
@@ -489,6 +511,15 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
           incrementSec: data?.incrementSec ?? 5,
           unlimitedTime: data?.unlimitedTime ?? false,
         };
+      } else if (gameType === 'gold_miner') {
+        const data = parsedStart.success ? parsedStart.data : undefined;
+        startOptions = {
+          maxLevels: data?.maxLevels ?? 5,
+          levelTimeLimitSec: data?.levelTimeLimitSec ?? 90,
+          enableMovingPig: data?.enableMovingPig ?? true,
+        };
+      } else if (gameType === 'lifeboat') {
+        startOptions = { includeExpansions: false };
       }
 
       const result = await roomManager.startNextGame(roomId, hostMember.id, startOptions);
@@ -550,6 +581,13 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
     roomManager,
     (roomId) => emitGameState(io, roomManager, roomId),
     (roomId, state) => emitRoomIfGameEnded(io, roomManager, roomId, state),
+  );
+  startGoldMinerTimer(
+    io,
+    roomManager,
+    (roomId) => emitGameState(io, roomManager, roomId),
+    (roomId, state) => emitRoomIfGameEnded(io, roomManager, roomId, state),
+    (roomId) => processBots(io, roomManager, roomId),
   );
 }
 

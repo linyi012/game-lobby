@@ -9,7 +9,7 @@ import { roomsRouter } from './routes/rooms.js';
 import { wordPacksRouter } from './routes/word-packs.js';
 import { wordPairsRouter } from './routes/word-pairs.js';
 import { scriptMurderScriptsRouter } from './routes/script-murder-scripts.js';
-import { authMiddleware } from './middleware/auth.js';
+import { createAuthMiddleware } from './middleware/auth.js';
 import { setupSocketHandlers } from './socket/index.js';
 import { RoomManager } from './services/room-manager.js';
 import { startGuestUserSweeper } from './services/guest-user-service.js';
@@ -52,6 +52,7 @@ const usePglite =
   process.env.DB_DRIVER === 'pglite' || DATABASE_URL.startsWith('pglite');
 const { db, pool } = usePglite ? await createPgliteDb() : createDb(DATABASE_URL);
 const roomManager = new RoomManager(db);
+const requireAuth = createAuthMiddleware(db);
 
 const app = express();
 app.use(cors({ origin: corsOriginCheck, credentials: true }));
@@ -62,10 +63,10 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api/auth', authRouter(db));
-app.use('/api/rooms', authMiddleware, roomsRouter(db, roomManager));
-app.use('/api/word-packs', authMiddleware, wordPacksRouter(db));
-app.use('/api/word-pairs', authMiddleware, wordPairsRouter(db));
-app.use('/api/script-murder/scripts', authMiddleware, scriptMurderScriptsRouter(db));
+app.use('/api/rooms', requireAuth, roomsRouter(db, roomManager));
+app.use('/api/word-packs', requireAuth, wordPacksRouter(db));
+app.use('/api/word-pairs', requireAuth, wordPairsRouter(db));
+app.use('/api/script-murder/scripts', requireAuth, scriptMurderScriptsRouter(db));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {

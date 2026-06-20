@@ -10,7 +10,9 @@ export type GameType =
   | 'chess'
   | 'script_murder'
   | 'dwarf_mine'
-  | 'chinese_chess';
+  | 'chinese_chess'
+  | 'gold_miner'
+  | 'lifeboat';
 
 export type AiDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
@@ -179,6 +181,22 @@ export const GAME_META: Record<GameType, GameMetaEntry> = {
     botsAllowed: true,
     requiresPerPlayerState: false,
   },
+  gold_miner: {
+    name: '黄金矿工',
+    minPlayers: 1,
+    maxPlayers: 4,
+    description: '可单人闯关，也可 2–4 人轮流下钩；关卡间购买道具，总分最高者获胜。',
+    botsAllowed: true,
+    requiresPerPlayerState: false,
+  },
+  lifeboat: {
+    name: '怒海求生',
+    minPlayers: 4,
+    maxPlayers: 6,
+    description: '救生艇上物资紧缺，秘密爱恨交织；划船、换位、抢夺，四只海鸥靠岸计分。',
+    botsAllowed: false,
+    requiresPerPlayerState: true,
+  },
 };
 
 export const AI_DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
@@ -201,6 +219,8 @@ export const ALL_GAME_TYPES: GameType[] = [
   'script_murder',
   'dwarf_mine',
   'chinese_chess',
+  'gold_miner',
+  'lifeboat',
 ];
 
 /** Tuple for Zod `z.enum()` — single source with ALL_GAME_TYPES */

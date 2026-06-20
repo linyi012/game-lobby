@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { users, roomMembers, type Database } from '@game-lobby/db';
-import { authMiddleware, signToken, type AuthRequest } from '../middleware/auth.js';
+import { createAuthMiddleware, signToken, type AuthRequest } from '../middleware/auth.js';
 import { generateGuestDisplayName } from '../utils/guest-names.js';
 
 const registerSchema = z.object({
@@ -46,6 +46,7 @@ function toUserResponse(user: {
 
 export function authRouter(db: Database): Router {
   const router = Router();
+  const requireAuth = createAuthMiddleware(db);
 
   router.get('/guest/random-name', (_req, res) => {
     res.json({ displayName: generateGuestDisplayName() });
@@ -80,7 +81,7 @@ export function authRouter(db: Database): Router {
     res.status(201).json({ token, user: profile });
   });
 
-  router.patch('/profile', authMiddleware, async (req: AuthRequest, res) => {
+  router.patch('/profile', requireAuth, async (req: AuthRequest, res) => {
     const parsed = updateProfileSchema.safeParse(req.body);
     if (!parsed.success || !req.user) {
       res.status(400).json({ message: '参数无效' });

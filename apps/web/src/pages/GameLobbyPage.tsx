@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { GameType, RoomSummary } from '@game-lobby/shared';
 import { ALL_GAME_TYPES, GAME_META } from '@game-lobby/shared';
 import { useAuth } from '../context/AuthContext';
@@ -10,11 +10,13 @@ export function GameLobbyPage() {
   const { gameType: gameTypeParam } = useParams<{ gameType: string }>();
   const location = useLocation();
   const notice = (location.state as { notice?: string } | null)?.notice ?? null;
+  const navigate = useNavigate();
   const { token } = useAuth();
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [roomName, setRoomName] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
 
   const isValidGame = gameTypeParam != null && ALL_GAME_TYPES.includes(gameTypeParam as GameType);
   const gameType = (isValidGame ? gameTypeParam : 'undercover') as GameType;
@@ -28,12 +30,28 @@ export function GameLobbyPage() {
     return unsub;
   }, [token, gameType, isValidGame]);
 
-  async function handleCreate() {
-    if (!token || !roomName.trim() || !isValidGame) return;
+  async function handleCreate(event?: { preventDefault?: () => void }) {
+    event?.preventDefault?.();
+    setError('');
+
+    if (!token) {
+      setError('请先登录');
+      return;
+    }
+    if (!isValidGame) return;
+
+    const name = roomName.trim();
+    if (!name) {
+      setError('请输入房间名称');
+      return;
+    }
+
     setCreating(true);
     try {
-      const room = await api.createRoom(token, roomName.trim(), gameType);
-      window.location.href = `/games/${gameType}/room/${room.id}`;
+      const room = await api.createRoom(token, name, gameType);
+      navigate(`/games/${gameType}/room/${room.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建房间失败');
     } finally {
       setCreating(false);
     }
@@ -79,17 +97,30 @@ export function GameLobbyPage() {
             )}
           </p>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flex: '1 1 280px' }}>
+        <form
+          style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flex: '1 1 280px', flexWrap: 'wrap' }}
+          onSubmit={handleCreate}
+        >
           <input
             className="input"
             placeholder="新房间名称"
             value={roomName}
-            onChange={(e) => setRoomName(e.target.value)}
+            onChange={(e) => {
+              setRoomName(e.target.value);
+              if (error) setError('');
+            }}
+            maxLength={64}
+            disabled={creating}
           />
-          <button className="btn" onClick={handleCreate} disabled={creating}>
-            创建房间
+          <button className="btn" type="submit" disabled={creating || !roomName.trim()}>
+            {creating ? '创建中…' : '创建房间'}
           </button>
-        </div>
+          {error && (
+            <p style={{ flex: '1 1 100%', margin: 0, color: 'var(--danger, #e57373)', fontSize: '0.9rem' }}>
+              {error}
+            </p>
+          )}
+        </form>
       </div>
 
       {loading ? (

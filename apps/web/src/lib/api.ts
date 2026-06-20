@@ -1,4 +1,5 @@
 import type { AuthResponse, GameType, RoomDetail, RoomSummary } from '@game-lobby/shared';
+import { notifyUnauthorized } from './auth-token';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -10,8 +11,20 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message ?? '请求失败');
+  let data: { message?: string } = {};
+  try {
+    data = await res.json();
+  } catch {
+    if (!res.ok) {
+      if (res.status === 401) notifyUnauthorized();
+      throw new Error('请求失败');
+    }
+    return undefined as T;
+  }
+  if (!res.ok) {
+    if (res.status === 401) notifyUnauthorized();
+    throw new Error(data.message ?? '请求失败');
+  }
   return data as T;
 }
 

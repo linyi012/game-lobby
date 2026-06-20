@@ -1,0 +1,1 @@
+export { LifeboatGame } from './LifeboatGame';

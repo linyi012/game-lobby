@@ -26,4 +26,7 @@ export type GameStartOptionsPayload = {
   scriptId?: string;
   dwarfMineMode?: 'base' | 'expansion';
   unlimitedTime?: boolean;
+  maxLevels?: number;
+  levelTimeLimitSec?: number;
+  enableMovingPig?: boolean;
 };

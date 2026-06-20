@@ -127,6 +127,9 @@ export function emitStartGame(
     scriptId?: string;
     dwarfMineMode?: 'base' | 'expansion';
     unlimitedTime?: boolean;
+    maxLevels?: number;
+    levelTimeLimitSec?: number;
+    enableMovingPig?: boolean;
   } = {},
 ) {
   return new Promise<{ ok: boolean; message?: string }>((resolve) => {
@@ -204,6 +207,12 @@ export function emitStartGame(
         mainTimeSec: options.mainTimeSec ?? 600,
         incrementSec: options.incrementSec ?? 5,
         unlimitedTime: options.unlimitedTime ?? false,
+      };
+    } else if (gameType === 'gold_miner') {
+      payload = {
+        maxLevels: options.maxLevels ?? 5,
+        levelTimeLimitSec: options.levelTimeLimitSec ?? 90,
+        enableMovingPig: options.enableMovingPig ?? true,
       };
     }
     socket?.emit('game:start', payload, resolve);

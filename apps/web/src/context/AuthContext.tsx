@@ -1,5 +1,13 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { UserProfile } from '@game-lobby/shared';
+import {
+  TOKEN_KEY,
+  USER_KEY,
+  clearStoredAuth,
+  isTokenExpired,
+  setUnauthorizedHandler,
+} from '../lib/auth-token';
+import { disconnectSocket } from '../lib/socket';
 
 interface AuthContextValue {
   user: UserProfile | null;
@@ -11,16 +19,17 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const TOKEN_KEY = 'game-lobby-token';
-const USER_KEY = 'game-lobby-user';
-
 function loadStored(): { token: string | null; user: UserProfile | null } {
   const token = localStorage.getItem(TOKEN_KEY);
   const raw = localStorage.getItem(USER_KEY);
-  if (!token || !raw) return { token: null, user: null };
+  if (!token || !raw || isTokenExpired(token)) {
+    clearStoredAuth();
+    return { token: null, user: null };
+  }
   try {
     return { token, user: JSON.parse(raw) as UserProfile };
   } catch {
+    clearStoredAuth();
     return { token: null, user: null };
   }
 }
@@ -29,6 +38,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const stored = loadStored();
   const [token, setToken] = useState<string | null>(stored.token);
   const [user, setUser] = useState<UserProfile | null>(stored.user);
+
+  const logout = () => {
+    disconnectSocket();
+    setToken(null);
+    setUser(null);
+    clearStoredAuth();
+  };
+
+  useEffect(() => {
+    setUnauthorizedHandler(logout);
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -46,12 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(TOKEN_KEY, newToken);
         localStorage.setItem(USER_KEY, JSON.stringify(newUser));
       },
-      logout: () => {
-        setToken(null);
-        setUser(null);
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY);
-      },
+      logout,
     }),
     [token, user],
   );
