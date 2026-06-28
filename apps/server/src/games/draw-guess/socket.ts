@@ -12,6 +12,7 @@ import {
   type DrawStroke,
 } from '@game-lobby/game-engine';
 import type { RoomManager } from '../../services/room-manager.js';
+import { registerGameTick } from '../../services/game-ticker.js';
 import type { GameSocketDeps } from '../undercover/socket.js';
 
 const selectWordSchema = z.object({ word: z.string().min(1).max(32) });
@@ -30,7 +31,7 @@ const guessSchema = z.object({ text: z.string().min(1).max(64) });
 const hintSchema = z.object({ text: z.string().min(1).max(32) });
 const revealCharSchema = z.object({ index: z.number().int().min(0).max(31) });
 
-let timerStarted = false;
+let timerRegistered = false;
 
 export function registerDrawGuessSockets(
   socket: Socket,
@@ -227,10 +228,10 @@ export function startDrawGuessTimer(
   emitGameState: (roomId: string) => Promise<void>,
   emitRoomIfGameEnded: (roomId: string, state: unknown) => Promise<void>,
 ) {
-  if (timerStarted) return;
-  timerStarted = true;
+  if (timerRegistered) return;
+  timerRegistered = true;
 
-  setInterval(async () => {
+  registerGameTick(async () => {
     const now = Date.now();
     for (const [roomId, game] of roomManager.getActiveGameEntries()) {
       if (game.gameType !== 'draw_guess') continue;
@@ -245,5 +246,5 @@ export function startDrawGuessTimer(
       await emitGameState(roomId);
       await emitRoomIfGameEnded(roomId, game.state);
     }
-  }, 1000);
+  });
 }

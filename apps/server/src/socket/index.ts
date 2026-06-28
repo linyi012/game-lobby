@@ -15,6 +15,7 @@ import { startGoTimer } from '../games/go/socket.js';
 import { startChessTimer } from '../games/chess/socket.js';
 import { startChineseChessTimer } from '../games/chinese-chess/socket.js';
 import { startGoldMinerTimer } from '../games/gold-miner/socket.js';
+import { startGameTicker } from '../services/game-ticker.js';
 import { resolveWordPool } from '../services/word-pack-service.js';
 import { resolvePairPool } from '../services/word-pair-service.js';
 import { getScriptForGame } from '../services/script-murder-service.js';
@@ -22,14 +23,23 @@ import { parsePairLines } from '@game-lobby/word-pairs';
 
 const joinSchema = z.object({ roomId: z.string().uuid() });
 const lobbySubscribeSchema = z.object({ gameType: z.enum(GAME_TYPE_ZOD_VALUES) });
-const addBotSchema = z.object({ difficulty: z.enum(['easy', 'medium', 'hard', 'expert']) });
-const removeMemberSchema = z.object({ memberId: z.string().uuid() });
+const addBotSchema = z.object({
+  difficulty: z.enum(['easy', 'medium', 'hard', 'expert']),
+  roomId: z.string().uuid().optional(),
+});
+const removeMemberSchema = z.object({
+  memberId: z.string().uuid(),
+  roomId: z.string().uuid().optional(),
+});
 const setRolesSchema = z.object({
   activePlayerIds: z.array(z.string().uuid()),
   spectatorIds: z.array(z.string().uuid()),
+  roomId: z.string().uuid().optional(),
 });
+const roomActionSchema = z.object({ roomId: z.string().uuid().optional() });
 const startGameSchema = z
   .object({
+    roomId: z.string().uuid().optional(),
     useJoker: z.boolean().optional(),
     assistMode: z.boolean().optional(),
     categoryIds: z.array(z.string()).optional(),
@@ -108,6 +118,9 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       displayName: string;
     };
 
+    const getRoomId = (socket: Socket, fallbackRoomId?: string) =>
+      resolveRoomId(roomManager, socket, fallbackRoomId);
+
     const gameSocketDeps = {
       roomManager,
       io,
@@ -157,10 +170,19 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       }
 
       const { detail, leftRooms, kickedSockets } = result;
-      socket.join(parsed.data.roomId);
+      for (const room of [...socket.rooms]) {
+        if (room !== socket.id) {
+          void socket.leave(room);
+        }
+      }
+      await socket.join(parsed.data.roomId);
       io.to(parsed.data.roomId).emit('room:updated', detail);
 
       for (const kicked of kickedSockets) {
+        const kickedSocket = io.sockets.sockets.get(kicked.socketId);
+        if (kickedSocket) {
+          void kickedSocket.leave(kicked.roomId);
+        }
         if (kicked.socketId === socket.id) continue;
         io.to(kicked.socketId).emit('room:kicked', { roomId: kicked.roomId, reason: 'joined_other_room' });
       }
@@ -195,6 +217,53 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       cb?.({ ok: true, room: detail });
     });
 
+    socket.on('room:resync', async (payload, cb) => {
+      const parsed = joinSchema.safeParse(payload);
+      if (!parsed.success) {
+        cb?.({ ok: false, message: '参数无效' });
+        return;
+      }
+
+      const roomId = getRoomId(socket, parsed.data.roomId);
+      if (!roomId) {
+        cb?.({ ok: false, message: '请先加入房间' });
+        return;
+      }
+      const detail = await roomManager.getRoomDetail(roomId);
+      if (!detail) {
+        cb?.({ ok: false, message: '房间不存在' });
+        return;
+      }
+
+      if (!roomManager.getSocketRoomId(socket.id)) {
+        const joinResult = await roomManager.joinRoom(roomId, user, socket.id);
+        if (!joinResult) {
+          cb?.({ ok: false, message: '房间不存在' });
+          return;
+        }
+        for (const room of [...socket.rooms]) {
+          if (room !== socket.id) {
+            void socket.leave(room);
+          }
+        }
+        await socket.join(roomId);
+      }
+
+      socket.emit('room:updated', detail);
+      const game = roomManager.getGame(roomId);
+      if (game) {
+        const member = detail.players.find((p) => p.userId === user.id);
+        const meta = GAME_META[game.gameType];
+        socket.emit('game:state', {
+          gameType: game.gameType,
+          state: meta.requiresPerPlayerState
+            ? projectGameState(game.gameType, game.state, member?.id ?? null)
+            : game.state,
+        });
+      }
+      cb?.({ ok: true, room: detail });
+    });
+
     socket.on('room:leave', async () => {
       const roomId = getRoomId(socket);
       const left = await roomManager.leaveRoom(socket.id);
@@ -211,8 +280,9 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
       }
     });
 
-    socket.on('room:close', async (_payload, cb) => {
-      const roomId = getRoomId(socket);
+    socket.on('room:close', async (payload, cb) => {
+      const parsed = roomActionSchema.safeParse(payload ?? {});
+      const roomId = getRoomId(socket, parsed.success ? parsed.data.roomId : undefined);
       if (!roomId) {
         cb?.({ ok: false, message: '未加入房间' });
         return;
@@ -233,7 +303,7 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
 
     socket.on('room:add-bot', async (payload, cb) => {
       const parsed = addBotSchema.safeParse(payload);
-      const roomId = getRoomId(socket);
+      const roomId = parsed.success ? getRoomId(socket, parsed.data.roomId) : null;
       if (!parsed.success || !roomId) {
         cb?.({ ok: false });
         return;
@@ -259,7 +329,7 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
 
     socket.on('room:remove-member', async (payload, cb) => {
       const parsed = removeMemberSchema.safeParse(payload);
-      const roomId = getRoomId(socket);
+      const roomId = parsed.success ? getRoomId(socket, parsed.data.roomId) : null;
       if (!parsed.success || !roomId) {
         cb?.({ ok: false });
         return;
@@ -280,6 +350,10 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
         return;
       }
       if (result.kickedSocketId) {
+        const kickedSocket = io.sockets.sockets.get(result.kickedSocketId);
+        if (kickedSocket) {
+          void kickedSocket.leave(roomId);
+        }
         io.to(result.kickedSocketId).emit('room:kicked', {
           roomId,
           reason: 'removed_by_host',
@@ -291,7 +365,7 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
 
     socket.on('room:set-roles', async (payload, cb) => {
       const parsed = setRolesSchema.safeParse(payload);
-      const roomId = getRoomId(socket);
+      const roomId = parsed.success ? getRoomId(socket, parsed.data.roomId) : null;
       if (!parsed.success || !roomId) {
         cb?.({ ok: false });
         return;
@@ -317,7 +391,8 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
     });
 
     socket.on('game:start', async (payload, cb) => {
-      const roomId = getRoomId(socket);
+      const parsedStart = startGameSchema.safeParse(payload);
+      const roomId = getRoomId(socket, parsedStart.success ? parsedStart.data?.roomId : undefined);
       if (!roomId) {
         cb?.({ ok: false, message: '未加入房间' });
         return;
@@ -330,7 +405,6 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
         return;
       }
 
-      const parsedStart = startGameSchema.safeParse(payload);
       const gameType = detail!.gameType;
       let startOptions: Record<string, unknown> = {};
 
@@ -595,12 +669,23 @@ export function setupSocketHandlers(io: Server, db: Database, roomManager: RoomM
     (roomId, state) => emitRoomIfGameEnded(io, roomManager, roomId, state),
     (roomId) => processBots(io, roomManager, roomId),
   );
+  startGameTicker();
 }
 
 async function broadcastLobbyRooms(io: Server, roomManager: RoomManager, gameType?: GameType) {
-  const targets = gameType ? [gameType] : ALL_GAME_TYPES;
   const sockets = await io.fetchSockets();
-  for (const gt of targets) {
+  const typesToBroadcast = new Set<GameType>();
+
+  if (gameType) {
+    typesToBroadcast.add(gameType);
+  } else {
+    for (const s of sockets) {
+      const gt = s.data.lobbyGameType as GameType | undefined;
+      if (gt) typesToBroadcast.add(gt);
+    }
+  }
+
+  for (const gt of typesToBroadcast) {
     const rooms = await roomManager.listRooms(gt);
     for (const s of sockets) {
       if (s.data.lobbyGameType === gt) {
@@ -645,9 +730,12 @@ function roomCloseMessage(reason: RoomCloseReason): string {
   }
 }
 
-function getRoomId(socket: Socket): string | null {
-  const rooms = Array.from(socket.rooms).filter((r) => r !== socket.id);
-  return rooms[0] ?? null;
+function resolveRoomId(
+  roomManager: RoomManager,
+  socket: Socket,
+  fallbackRoomId?: string,
+): string | null {
+  return roomManager.getSocketRoomId(socket.id) ?? fallbackRoomId ?? null;
 }
 
 async function findMember(roomManager: RoomManager, roomId: string, userId: string) {

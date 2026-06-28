@@ -4,7 +4,7 @@ import type { GameType, RoomSummary } from '@game-lobby/shared';
 import { ALL_GAME_TYPES, GAME_META } from '@game-lobby/shared';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../lib/api';
-import { getSocket, subscribeLobby } from '../lib/socket';
+import { getSocket, emitLobbySubscribe, onResync, subscribeLobby } from '../lib/socket';
 
 export function GameLobbyPage() {
   const { gameType: gameTypeParam } = useParams<{ gameType: string }>();
@@ -27,7 +27,16 @@ export function GameLobbyPage() {
     getSocket(token);
     const unsub = subscribeLobby(gameType, setRooms);
     api.fetchRooms(token, gameType).then(setRooms).finally(() => setLoading(false));
-    return unsub;
+
+    const unsubResync = onResync(() => {
+      getSocket(token);
+      emitLobbySubscribe(gameType);
+    });
+
+    return () => {
+      unsub();
+      unsubResync();
+    };
   }, [token, gameType, isValidGame]);
 
   async function handleCreate(event?: { preventDefault?: () => void }) {

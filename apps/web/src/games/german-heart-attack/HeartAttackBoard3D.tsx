@@ -11,6 +11,9 @@ import {
 const faceTextureCache = new Map<string, THREE.CanvasTexture>();
 const decalTextureCache = new Map<string, THREE.CanvasTexture>();
 
+const TILE_W = 0.66;
+const TILE_H = 0.98;
+
 function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -21,9 +24,13 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   ctx.closePath();
 }
 
+/** Flat card face aspect (width : length), no thickness — art anchored at texture (0,0). */
+const CARD_ASPECT = TILE_W / TILE_H;
+const CARD_ART_SCALE = 0.65;
+
 function getCardTexture(card: HeartAttackCard): THREE.CanvasTexture {
   const label = cardLabel(card);
-  const key = label;
+  const key = `flat-tl-v3|${label}`;
   const cached = faceTextureCache.get(key);
   if (cached) return cached;
 
@@ -34,25 +41,35 @@ function getCardTexture(card: HeartAttackCard): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, size, size);
 
+  const artW = Math.round(size * CARD_ASPECT);
+  const artH = size;
+  const cornerR = Math.max(4, Math.round(artW * 0.08));
+
+  ctx.save();
+  ctx.scale(CARD_ART_SCALE, CARD_ART_SCALE);
+
   const bg =
     card.kind === 'bomb' ? '#7f1d1d' : card.kind === 'wild' ? '#4c1d95' : card.kind === 'double' ? '#854d0e' : '#fef3c7';
   ctx.fillStyle = bg;
-  roundedRect(ctx, 6, 6, size - 12, size - 12, 28);
+  roundedRect(ctx, 0, 0, artW, artH, cornerR);
   ctx.fill();
 
   ctx.fillStyle = card.kind === 'bomb' ? '#fecaca' : '#1a1206';
-  ctx.font = "800 72px 'Segoe UI Emoji', system-ui, sans-serif";
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  const cx = artW / 2;
+  const cy = artH / 2;
   const lines = label.split(' ');
   if (lines.length > 1) {
-    ctx.font = "800 56px 'Segoe UI Emoji', system-ui, sans-serif";
-    ctx.fillText(lines[0]!, size / 2, size / 2 - 20);
-    ctx.font = "700 40px 'Segoe UI', system-ui, sans-serif";
-    ctx.fillText(lines.slice(1).join(' '), size / 2, size / 2 + 36);
+    ctx.font = `800 ${Math.round(artH * 0.26)}px 'Segoe UI Emoji', system-ui, sans-serif`;
+    ctx.fillText(lines[0]!, cx, cy - artH * 0.1);
+    ctx.font = `700 ${Math.round(artH * 0.17)}px 'Segoe UI', system-ui, sans-serif`;
+    ctx.fillText(lines.slice(1).join(' '), cx, cy + artH * 0.14);
   } else {
-    ctx.fillText(label, size / 2, size / 2 + 6);
+    ctx.font = `800 ${Math.round(artH * 0.34)}px 'Segoe UI Emoji', system-ui, sans-serif`;
+    ctx.fillText(label, cx, cy);
   }
+  ctx.restore();
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.anisotropy = 8;
@@ -85,14 +102,37 @@ function getDecalTexture(text: string): THREE.CanvasTexture {
   return texture;
 }
 
-const TILE_W = 0.66;
-const TILE_H = 0.98;
-const TILE_D = 0.15;
 const CIRCLE_RADIUS = 4.1;
 const TWO_PLAYER_HALF_GAP = 2.35;
 const PLAYFIELD_LIFT_2P = 0.62;
 const PLAYFIELD_LIFT_MP = 0.28;
+const FLIP_ZONE_Z = -1.18;
 const HTML_Z: [number, number] = [3, 0];
+
+/** Infer which player flipped a card based on turn order (pile is shared logically). */
+function inferFlipperIndex(
+  cardIndexInPile: number,
+  pileLength: number,
+  currentPlayerIndex: number,
+  playerCount: number,
+): number {
+  return (currentPlayerIndex - pileLength + cardIndexInPile + playerCount * 1000) % playerCount;
+}
+
+function groupPileByPlayer(
+  pile: HeartAttackCard[],
+  currentPlayerIndex: number,
+  playerCount: number,
+): Map<number, HeartAttackCard[]> {
+  const map = new Map<number, HeartAttackCard[]>();
+  for (let i = 0; i < pile.length; i++) {
+    const pi = inferFlipperIndex(i, pile.length, currentPlayerIndex, playerCount);
+    const list = map.get(pi) ?? [];
+    list.push(pile[i]!);
+    map.set(pi, list);
+  }
+  return map;
+}
 
 function seatLayout(playerCount: number, seatIndex: number) {
   if (playerCount === 2) {
@@ -111,13 +151,34 @@ interface Props {
   state: HeartAttackGameState;
   myMemberId: string | null;
   bellActive: boolean;
+  slapAnimations?: SlapAnimation[];
+  bellSlapPulse?: number;
 }
 
-function Card3D({ card, y = 0.12 }: { card: HeartAttackCard; y?: number }) {
+export interface SlapAnimation {
+  id: string;
+  playerId: string;
+  startTime: number;
+  overlapIndex: number;
+}
+
+function FlatCard3D({ card, stackIndex = 0 }: { card: HeartAttackCard; stackIndex?: number }) {
   const texture = useMemo(() => getCardTexture(card), [card]);
+  const y = stackIndex * 0.045 + 0.024;
   return (
-    <RoundedBox args={[TILE_W, TILE_H, TILE_D]} radius={0.07} smoothness={4} position={[0, y, 0]} castShadow>
-      <meshStandardMaterial map={texture} roughness={0.55} metalness={0.05} />
+    <RoundedBox
+      args={[TILE_W * 0.92, 0.045, TILE_H * 0.92]}
+      radius={0.04}
+      smoothness={2}
+      position={[
+        Math.sin(stackIndex * 1.7) * 0.012,
+        y,
+        Math.cos(stackIndex * 2.3) * 0.012,
+      ]}
+      rotation={[0, stackIndex * 0.06, 0]}
+      castShadow
+    >
+      <meshStandardMaterial map={texture} color="#ffffff" roughness={0.55} metalness={0.05} />
     </RoundedBox>
   );
 }
@@ -170,46 +231,211 @@ function PlayerStack({
   );
 }
 
-function Bell({ active }: { active: boolean }) {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame((st) => {
-    const m = ref.current;
-    if (!m) return;
-    const mat = m.material as THREE.MeshStandardMaterial;
-    if (active) {
-      const pulse = 0.35 + Math.sin(st.clock.elapsedTime * 6) * 0.25;
-      mat.emissiveIntensity = pulse;
-    } else {
-      mat.emissiveIntensity = THREE.MathUtils.lerp(mat.emissiveIntensity, 0.08, 0.1);
+function Bell({ active, slapPulse = 0 }: { active: boolean; slapPulse?: number }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const bodyRef = useRef<THREE.Mesh>(null);
+  const shakeRef = useRef(0);
+  const bellProfile = useMemo(
+    () => [
+      new THREE.Vector2(0.055, 0),
+      new THREE.Vector2(0.22, 0),
+      new THREE.Vector2(0.24, 0.025),
+      new THREE.Vector2(0.21, 0.1),
+      new THREE.Vector2(0.13, 0.19),
+      new THREE.Vector2(0.07, 0.24),
+      new THREE.Vector2(0.045, 0.27),
+    ],
+    [],
+  );
+
+  useEffect(() => {
+    if (slapPulse > 0) shakeRef.current = 1;
+  }, [slapPulse]);
+
+  useFrame((st, dt) => {
+    const m = bodyRef.current;
+    const g = groupRef.current;
+    if (m) {
+      const mat = m.material as THREE.MeshStandardMaterial;
+      const target = active ? 0.4 + Math.sin(st.clock.elapsedTime * 6) * 0.28 : 0.06;
+      mat.emissiveIntensity = THREE.MathUtils.lerp(mat.emissiveIntensity, target, active ? 0.14 : 0.1);
+    }
+    if (g && shakeRef.current > 0) {
+      shakeRef.current = Math.max(0, shakeRef.current - dt * 3.2);
+      const s = shakeRef.current;
+      g.rotation.z = Math.sin(st.clock.elapsedTime * 48) * 0.12 * s;
+      g.position.y = 0.04 + s * 0.04;
+    } else if (g) {
+      g.rotation.z = THREE.MathUtils.lerp(g.rotation.z, 0, 0.15);
+      g.position.y = THREE.MathUtils.lerp(g.position.y, 0.04, 0.15);
     }
   });
+
   return (
-    <mesh ref={ref} position={[0, 0.35, 0]} castShadow>
-      <sphereGeometry args={[0.28, 24, 24]} />
-      <meshStandardMaterial
-        color="#fbbf24"
-        emissive="#f59e0b"
-        emissiveIntensity={active ? 0.5 : 0.08}
-        metalness={0.6}
-        roughness={0.35}
-      />
-    </mesh>
+    <group ref={groupRef} position={[0, 0.04, 0]}>
+      <mesh position={[0, 0.018, 0]} receiveShadow castShadow>
+        <cylinderGeometry args={[0.34, 0.38, 0.036, 32]} />
+        <meshStandardMaterial color="#2a1810" roughness={0.85} metalness={0.15} />
+      </mesh>
+
+      <mesh ref={bodyRef} position={[0, 0.16, 0]} castShadow>
+        <latheGeometry args={[bellProfile, 32]} />
+        <meshStandardMaterial
+          color="#d4a017"
+          emissive="#f59e0b"
+          emissiveIntensity={active ? 0.45 : 0.06}
+          metalness={0.88}
+          roughness={0.22}
+        />
+      </mesh>
+
+      <mesh position={[0, 0.31, 0]} castShadow>
+        <cylinderGeometry args={[0.028, 0.04, 0.05, 16]} />
+        <meshStandardMaterial color="#b8860b" metalness={0.9} roughness={0.18} />
+      </mesh>
+      <mesh position={[0, 0.36, 0]} castShadow>
+        <sphereGeometry args={[0.05, 16, 16]} />
+        <meshStandardMaterial color="#c9a227" metalness={0.92} roughness={0.15} />
+      </mesh>
+
+      <mesh position={[0, 0.1, 0.04]} castShadow>
+        <sphereGeometry args={[0.05, 14, 14]} />
+        <meshStandardMaterial color="#7a6010" metalness={0.75} roughness={0.35} />
+      </mesh>
+    </group>
   );
 }
 
-function CenterPile({ pile }: { pile: HeartAttackCard[] }) {
-  if (pile.length === 0) return null;
-  const top = pile[pile.length - 1]!;
+function SlapHand({
+  seatX,
+  seatZ,
+  startTime,
+  overlapIndex,
+}: {
+  seatX: number;
+  seatZ: number;
+  startTime: number;
+  overlapIndex: number;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  const skin = '#e8b896';
+  const sleeve = '#334155';
+
+  useEffect(() => {
+    const g = ref.current;
+    if (g) g.visible = true;
+  }, [startTime]);
+
+  useFrame(() => {
+    const g = ref.current;
+    if (!g) return;
+    const elapsed = (Date.now() - startTime) / 1000;
+    const reach = 0.2;
+    const hold = 0.12;
+    const retract = 0.32;
+    const total = reach + hold + retract;
+
+    if (elapsed >= total) {
+      g.visible = false;
+      return;
+    }
+
+    const startX = seatX * 0.62;
+    const startZ = seatZ * 0.62;
+    const overlapX = (overlapIndex % 3 - 1) * 0.09;
+    const overlapZ = Math.floor(overlapIndex / 3) * 0.07 - 0.02;
+    const endX = overlapX;
+    const endZ = overlapZ;
+
+    let progress = 0;
+    if (elapsed < reach) {
+      const t = elapsed / reach;
+      progress = 1 - Math.pow(1 - t, 2.8);
+    } else if (elapsed < reach + hold) {
+      progress = 1;
+    } else {
+      const t = (elapsed - reach - hold) / retract;
+      progress = 1 - t * t;
+    }
+
+    g.position.x = startX + (endX - startX) * progress;
+    g.position.z = startZ + (endZ - startZ) * progress;
+    g.position.y = 0.1 + Math.sin(progress * Math.PI) * 0.22;
+
+    // Fingers extend toward local -Z; point them at table center from the seat.
+    g.rotation.y = Math.atan2(seatX, seatZ);
+    g.rotation.x = THREE.MathUtils.lerp(0.25, 0.72, progress);
+  });
+
+  return (
+    <group ref={ref}>
+      <mesh position={[0, 0.05, 0.22]} castShadow>
+        <boxGeometry args={[0.12, 0.1, 0.34]} />
+        <meshStandardMaterial color={sleeve} roughness={0.85} />
+      </mesh>
+      <mesh position={[0, 0.06, 0.02]} castShadow>
+        <boxGeometry args={[0.17, 0.06, 0.15]} />
+        <meshStandardMaterial color={skin} roughness={0.72} />
+      </mesh>
+      {[-0.06, -0.02, 0.02, 0.06].map((x, i) => (
+        <mesh key={i} position={[x, 0.075, -0.07 - i * 0.012]} castShadow>
+          <boxGeometry args={[0.028, 0.04, 0.07]} />
+          <meshStandardMaterial color={skin} roughness={0.72} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function SlapHandsLayer({
+  animations,
+  seatByPlayerId,
+}: {
+  animations: SlapAnimation[];
+  seatByPlayerId: Map<string, { x: number; z: number }>;
+}) {
+  if (animations.length === 0) return null;
   return (
     <group>
-      {pile.slice(-3).map((card, i) => (
-        <group key={i} position={[Math.sin(i) * 0.02, i * 0.04, Math.cos(i) * 0.02]}>
-          <Card3D card={card} y={0.08 + i * 0.04} />
-        </group>
+      {animations.map((anim) => {
+        const seat = seatByPlayerId.get(anim.playerId);
+        if (!seat) return null;
+        return (
+          <SlapHand
+            key={anim.id}
+            seatX={seat.x}
+            seatZ={seat.z}
+            startTime={anim.startTime}
+            overlapIndex={anim.overlapIndex}
+          />
+        );
+      })}
+    </group>
+  );
+}
+
+function PlayerFlipPile({ cards }: { cards: HeartAttackCard[] }) {
+  if (cards.length === 0) return null;
+  const top = cards[cards.length - 1]!;
+  const visible = cards.slice(-3);
+  const base = cards.length - visible.length;
+  return (
+    <group position={[0, 0, FLIP_ZONE_Z]}>
+      {visible.map((card, i) => (
+        <FlatCard3D key={`${base + i}-${cardLabel(card)}`} card={card} stackIndex={i} />
       ))}
-      <Html center zIndexRange={HTML_Z} position={[0, 1.1, 0]} style={{ pointerEvents: 'none' }}>
-        <div style={{ fontSize: '11px', color: '#94a3b8', background: 'rgba(0,0,0,0.5)', padding: '2px 8px', borderRadius: 8 }}>
-          中央 {pile.length} 张 · {cardLabel(top)}
+      <Html center zIndexRange={HTML_Z} position={[0, 0.38, 0]} style={{ pointerEvents: 'none' }}>
+        <div
+          style={{
+            fontSize: '10px',
+            color: '#94a3b8',
+            background: 'rgba(0,0,0,0.55)',
+            padding: '2px 7px',
+            borderRadius: 8,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {cards.length} 张 · {cardLabel(top)}
         </div>
       </Html>
     </group>
@@ -289,7 +515,7 @@ function Confetti() {
   );
 }
 
-function Scene({ state, myMemberId, bellActive }: Props) {
+function Scene({ state, myMemberId, bellActive, slapAnimations = [], bellSlapPulse = 0 }: Props) {
   const ordered = useMemo(() => {
     const players = state.players;
     const meIdx = players.findIndex((p) => p.id === myMemberId);
@@ -304,6 +530,25 @@ function Scene({ state, myMemberId, bellActive }: Props) {
   const hasWinner = ended && state.winnerId != null;
   const tableSize = n <= 2 ? 10 : CIRCLE_RADIUS * 2 + 3;
   const playfieldLift = n === 2 ? PLAYFIELD_LIFT_2P : PLAYFIELD_LIFT_MP;
+
+  const pileByPlayer = useMemo(
+    () => groupPileByPlayer(state.centerPile, state.currentPlayerIndex, state.players.length),
+    [state.centerPile, state.currentPlayerIndex, state.players.length],
+  );
+
+  const pendingWildIdx =
+    state.stage === 'choosing_fruit' && state.wildFlipperId
+      ? state.players.findIndex((p) => p.id === state.wildFlipperId)
+      : -1;
+
+  const seatByPlayerId = useMemo(() => {
+    const map = new Map<string, { x: number; z: number }>();
+    ordered.forEach(({ player }, seatIndex) => {
+      const { x, z } = seatLayout(n, seatIndex);
+      map.set(player.id, { x, z });
+    });
+    return map;
+  }, [ordered, n]);
 
   return (
     <>
@@ -328,15 +573,19 @@ function Scene({ state, myMemberId, bellActive }: Props) {
       )}
 
       <group position={[0, playfieldLift, 0]}>
-        <CenterPile pile={state.centerPile} />
-        <Bell active={bellActive} />
+        <Bell active={bellActive} slapPulse={bellSlapPulse} />
+        <SlapHandsLayer animations={slapAnimations} seatByPlayerId={seatByPlayerId} />
         <DiscardPile count={state.discardCount} />
 
-        {ordered.map(({ player }, seatIndex) => {
+        {ordered.map(({ player, originalIndex }, seatIndex) => {
           const { x, z, rotateY } = seatLayout(n, seatIndex);
           const isCurrent = current?.id === player.id;
           const isWinner = state.winnerId === player.id;
           const label = player.id === myMemberId ? `${player.name}（你）` : player.name;
+          const flipCards = [...(pileByPlayer.get(originalIndex) ?? [])];
+          if (pendingWildIdx === originalIndex && state.pendingWild) {
+            flipCards.push(state.pendingWild);
+          }
           return (
             <group key={player.id} position={[x, 0, z]} rotation={[0, rotateY, 0]}>
               <PlayerStack
@@ -345,6 +594,7 @@ function Scene({ state, myMemberId, bellActive }: Props) {
                 isCurrent={isCurrent && state.phase === 'playing'}
                 isWinner={isWinner}
               />
+              <PlayerFlipPile cards={flipCards} />
             </group>
           );
         })}

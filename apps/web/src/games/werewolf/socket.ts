@@ -1,9 +1,9 @@
-import { getActiveSocket } from '../../lib/socket';
+import { emitWithAck } from '../../lib/emit-with-ack';
 
-function emit(event: string, payload: unknown): Promise<{ ok: boolean; message?: string }> {
-  return new Promise((resolve) => {
-    getActiveSocket()?.emit(event, payload, resolve);
-  });
+type Ack = { ok: boolean; message?: string };
+
+function emit(event: string, payload: unknown = {}): Promise<Ack> {
+  return emitWithAck<Ack>(event, payload);
 }
 
 export function emitWolfVote(targetId: string) {

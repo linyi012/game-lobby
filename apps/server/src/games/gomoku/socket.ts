@@ -26,15 +26,21 @@ export function registerGomokuSockets(socket: Socket, deps: GameSocketDeps) {
     const parsed = gomokuPlaceSchema.safeParse(payload);
     const roomId = getRoomId(socket);
     if (!parsed.success || !roomId) {
-      cb?.({ ok: false });
+      cb?.({ ok: false, message: '参数无效' });
       return;
     }
     const user = socket.data.user as { id: string };
     const member = await findMember(roomId, user.id);
-    if (!member) return;
+    if (!member) {
+      cb?.({ ok: false, message: '你不是房间成员' });
+      return;
+    }
 
     const game = roomManager.getGame(roomId);
-    if (!game || game.gameType !== 'gomoku') return;
+    if (!game || game.gameType !== 'gomoku') {
+      cb?.({ ok: false, message: '游戏未开始' });
+      return;
+    }
 
     game.state = placeGomokuStone(
       game.state as GomokuGameState,

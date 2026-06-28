@@ -1,25 +1,19 @@
-import { getActiveSocket } from '../../lib/socket';
+import { emitWithAck } from '../../lib/emit-with-ack';
+
+type Ack = { ok: boolean };
 
 export function emitChineseChessMove(from: string, to: string) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:xiangqi:move', { from, to }, resolve);
-  });
+  return emitWithAck<Ack>('game:xiangqi:move', { from, to });
 }
 
 export function emitChineseChessResign() {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:xiangqi:resign', {}, resolve);
-  });
+  return emitWithAck<Ack>('game:xiangqi:resign', {});
 }
 
 export function emitChineseChessOfferDraw() {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:xiangqi:offer_draw', {}, resolve);
-  });
+  return emitWithAck<Ack>('game:xiangqi:offer_draw', {});
 }
 
 export function emitChineseChessRespondDraw(accept: boolean) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:xiangqi:respond_draw', { accept }, resolve);
-  });
+  return emitWithAck<Ack>('game:xiangqi:respond_draw', { accept });
 }

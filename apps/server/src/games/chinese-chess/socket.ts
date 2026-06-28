@@ -9,6 +9,7 @@ import {
   tickChineseChessGame,
   type ChineseChessGameState,
 } from '@game-lobby/game-engine';
+import { registerGameTick } from '../../services/game-ticker.js';
 
 const squareSchema = z.string().regex(/^[a-i][0-9]$/);
 
@@ -138,7 +139,7 @@ export function registerChineseChessSockets(socket: Socket, deps: GameSocketDeps
   });
 }
 
-let timerStarted = false;
+let timerRegistered = false;
 
 export function startChineseChessTimer(
   io: import('socket.io').Server,
@@ -146,10 +147,10 @@ export function startChineseChessTimer(
   emitGameState: (roomId: string) => Promise<void>,
   emitRoomIfGameEnded: (roomId: string, state: unknown) => Promise<void>,
 ) {
-  if (timerStarted) return;
-  timerStarted = true;
+  if (timerRegistered) return;
+  timerRegistered = true;
 
-  setInterval(async () => {
+  registerGameTick(async () => {
     const now = Date.now();
     for (const [roomId, game] of roomManager.getActiveGameEntries()) {
       if (game.gameType !== 'chinese_chess') continue;
@@ -164,5 +165,5 @@ export function startChineseChessTimer(
       await emitGameState(roomId);
       await emitRoomIfGameEnded(roomId, game.state);
     }
-  }, 1000);
+  });
 }

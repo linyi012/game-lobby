@@ -8,6 +8,7 @@ import {
   type ChessGameState,
   type ChessPromotion,
 } from '@game-lobby/game-engine';
+import { registerGameTick } from '../../services/game-ticker.js';
 
 const squareSchema = z.string().regex(/^[a-h][1-8]$/);
 const promotionSchema = z.enum(['q', 'r', 'b', 'n']);
@@ -88,7 +89,7 @@ export function registerChessSockets(socket: Socket, deps: GameSocketDeps) {
   });
 }
 
-let timerStarted = false;
+let timerRegistered = false;
 
 export function startChessTimer(
   io: import('socket.io').Server,
@@ -96,10 +97,10 @@ export function startChessTimer(
   emitGameState: (roomId: string) => Promise<void>,
   emitRoomIfGameEnded: (roomId: string, state: unknown) => Promise<void>,
 ) {
-  if (timerStarted) return;
-  timerStarted = true;
+  if (timerRegistered) return;
+  timerRegistered = true;
 
-  setInterval(async () => {
+  registerGameTick(async () => {
     const now = Date.now();
     for (const [roomId, game] of roomManager.getActiveGameEntries()) {
       if (game.gameType !== 'chess') continue;
@@ -114,5 +115,5 @@ export function startChessTimer(
       await emitGameState(roomId);
       await emitRoomIfGameEnded(roomId, game.state);
     }
-  }, 1000);
+  });
 }

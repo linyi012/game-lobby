@@ -99,13 +99,40 @@ export function playFlipSound() {
   tone(280, 0.05, 'triangle', 0.07);
 }
 
+export function playBellRing() {
+  if (!prefs.sfx) return;
+  const ac = ctx();
+  const t = ac.currentTime;
+  const partials: [number, number, number][] = [
+    [880, 0.28, 0.9],
+    [1318, 0.22, 0.65],
+    [1760, 0.18, 0.45],
+    [2217, 0.12, 0.3],
+    [2640, 0.08, 0.18],
+  ];
+  for (const [freq, vol, decay] of partials) {
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.992, t + 0.08);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(vol, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + decay + 0.05);
+  }
+  noiseBurst(0.12, 0.07);
+}
+
 export function playSlapCorrect() {
-  tone(880, 0.08, 'sine', 0.12);
-  setTimeout(() => tone(1175, 0.15, 'sine', 0.1), 60);
+  playBellRing();
 }
 
 export function playSlapWrong() {
-  tone(160, 0.2, 'sawtooth', 0.08);
+  tone(120, 0.25, 'sawtooth', 0.12, 0.005, 0.12);
 }
 
 export function playBombSound() {

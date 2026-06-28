@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDeck,
+  checkGameEnd,
   chooseWildFruit,
   computeFruitTotals,
   createHeartAttackGame,
@@ -113,9 +114,12 @@ describe('slap', () => {
       fruitTotals: computeFruitTotals([{ kind: 'normal', fruit: 'apple', count: 3 }]),
       bellActive: false,
     };
-    const before = state.players[1]!.hand.length;
+    const slapperBefore = state.players[1]!.hand.length;
+    const otherBefore = state.players[0]!.hand.length;
     state = slapHeartAttack(state, 'p2', 200);
-    expect(state.players[1]!.hand.length).toBe(before + 1);
+    expect(state.players[1]!.hand.length).toBe(slapperBefore - 1);
+    expect(state.players[0]!.hand.length).toBe(otherBefore + 1);
+    expect(state.centerPile).toHaveLength(1);
     expect(state.lastAction?.correct).toBe(false);
   });
 
@@ -179,16 +183,63 @@ describe('wild and bomb', () => {
 });
 
 describe('win condition', () => {
-  it('empty hand after flip wins', () => {
-    let state = createHeartAttackGame(players);
+  it('empty hand after flip does not end game while others still have cards', () => {
+    const three = [
+      { id: 'p1', name: 'Alice', isBot: false },
+      { id: 'p2', name: 'Bob', isBot: false },
+      { id: 'p3', name: 'Carol', isBot: false },
+    ];
+    let state = createHeartAttackGame(three);
     const idx = state.currentPlayerIndex;
     const p = state.players[idx]!;
-    p.hand = [{ kind: 'normal', fruit: 'apple', count: 1 }];
-    state = { ...state, players: state.players.map((pl, i) => (i === idx ? { ...p } : pl)) };
+    state = {
+      ...state,
+      players: state.players.map((pl, i) =>
+        i === idx
+          ? { ...pl, hand: [{ kind: 'normal', fruit: 'apple', count: 1 }], handCount: 1 }
+          : {
+              ...pl,
+              hand: [
+                { kind: 'normal', fruit: 'lemon', count: 2 },
+                { kind: 'normal', fruit: 'peach', count: 1 },
+              ],
+              handCount: 2,
+            },
+      ),
+    };
 
-    state = flipHeartAttackCard(state, p.id);
+    state = flipHeartAttackCard(state, state.players[idx]!.id);
+    expect(state.phase).toBe('playing');
+    expect(state.players[idx]!.hand).toHaveLength(0);
+  });
+
+  it('two-player game ends when one player runs out of cards', () => {
+    let state = createHeartAttackGame(players);
+    state = {
+      ...state,
+      players: [
+        { ...state.players[0]!, hand: [{ kind: 'normal', fruit: 'apple', count: 1 }], handCount: 1 },
+        { ...state.players[1]!, hand: [{ kind: 'normal', fruit: 'lemon', count: 2 }], handCount: 1 },
+      ],
+      currentPlayerIndex: 0,
+    };
+    state = flipHeartAttackCard(state, 'p1');
     expect(state.phase).toBe('ended');
-    expect(state.winnerId).toBe(p.id);
+    expect(state.winnerId).toBe('p2');
+  });
+
+  it('last player with cards wins', () => {
+    let state = createHeartAttackGame(players);
+    state = {
+      ...state,
+      players: [
+        { ...state.players[0]!, hand: [{ kind: 'normal', fruit: 'apple', count: 1 }], handCount: 1 },
+        { ...state.players[1]!, hand: [], handCount: 0 },
+      ],
+    };
+    state = checkGameEnd(state);
+    expect(state.phase).toBe('ended');
+    expect(state.winnerId).toBe('p1');
   });
 });
 

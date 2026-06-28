@@ -1,20 +1,15 @@
-import { getActiveSocket } from '../../lib/socket';
-import type { Fruit } from '@game-lobby/game-engine';
+import { emitWithAck } from '../../lib/emit-with-ack';
+
+type Ack = { ok: boolean };
 
 export function emitHeartAttackFlip() {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:heartattack:flip', {}, resolve);
-  });
+  return emitWithAck<Ack>('game:heartattack:flip', {});
 }
 
 export function emitHeartAttackSlap() {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:heartattack:slap', {}, resolve);
-  });
+  return emitWithAck<Ack>('game:heartattack:slap', {});
 }
 
-export function emitHeartAttackChooseWild(fruit: Fruit) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:heartattack:choose_wild', { fruit }, resolve);
-  });
+export function emitHeartAttackChooseWild(fruit: string) {
+  return emitWithAck<Ack>('game:heartattack:choose_wild', { fruit });
 }

@@ -137,6 +137,12 @@ function endGame(state: HeartAttackGameState, winnerId: string): HeartAttackGame
   };
 }
 
+export function checkGameEnd(state: HeartAttackGameState): HeartAttackGameState {
+  const alive = state.players.filter((p) => p.hand.length > 0);
+  if (alive.length === 1) return endGame(state, alive[0]!.id);
+  return state;
+}
+
 function withNextTurn(
   state: HeartAttackGameState,
   players: HeartAttackPlayerState[],
@@ -239,17 +245,15 @@ export function flipHeartAttackCard(
       card: { ...card },
     };
     if (player.hand.length === 0) {
-      return endGame(
-        {
-          ...state,
-          players,
+      return checkGameEnd(
+        withNextTurn(state, players, {
           centerPile: [],
           discardCount,
           fruitTotals: emptyFruitTotals(),
           bellActive: false,
           lastAction,
-        },
-        player.id,
+          message: `${player.name} 翻出炸弹！中央牌堆清空`,
+        }),
       );
     }
     return withNextTurn(state, players, {
@@ -274,9 +278,13 @@ export function flipHeartAttackCard(
   };
 
   if (player.hand.length === 0) {
-    return endGame(
-      { ...state, players, centerPile, fruitTotals, bellActive, lastAction },
-      player.id,
+    return checkGameEnd(
+      withNextTurn(state, players, {
+        centerPile,
+        fruitTotals,
+        bellActive,
+        lastAction,
+      }),
     );
   }
 
@@ -314,18 +322,18 @@ export function chooseWildFruit(
   };
 
   if (player.hand.length === 0) {
-    return endGame(
-      {
-        ...state,
-        players,
+    return checkGameEnd(
+      withNextTurn(state, players, {
         centerPile,
         fruitTotals,
         bellActive,
         pendingWild: null,
         wildFlipperId: null,
         lastAction,
-      },
-      player.id,
+        message: bellActive
+          ? `${player.name} 选择 ${FRUIT_LABELS[fruit]}，拍铃！`
+          : `${player.name} 选择 ${FRUIT_LABELS[fruit]}`,
+      }),
     );
   }
 
@@ -349,8 +357,8 @@ export function slapHeartAttack(
 ): HeartAttackGameState {
   if (state.phase !== 'playing' || state.stage === 'choosing_fruit') return state;
 
-  const slapper = state.players.find((p) => p.id === playerId);
-  if (!slapper) return state;
+  const actor = state.players.find((p) => p.id === playerId);
+  if (!actor) return state;
 
   if (state.stage === 'resolving_slap' && state.slapQueue.length > 0) {
     const earliest = [...state.slapQueue].sort((a, b) => a.at - b.at)[0]!;
@@ -367,54 +375,86 @@ export function slapHeartAttack(
   }
 
   const winner = queue.sort((a, b) => a.at - b.at)[0]!;
-  const winnerPlayer = state.players.find((p) => p.id === winner.playerId);
-  if (!winnerPlayer) return state;
+  if (!state.players.some((p) => p.id === winner.playerId)) return state;
 
   const correct = state.bellActive;
   const pile = [...state.centerPile];
+  const players = clonePlayers(state.players);
+  const slapper = players.find((p) => p.id === winner.playerId)!;
+  const others = players.filter((p) => p.id !== winner.playerId);
 
-  if (!correct && pile.length === 0) {
+  if (!correct) {
+    let given = 0;
+    for (const other of others) {
+      if (slapper.hand.length === 0) break;
+      other.hand.push(slapper.hand.shift()!);
+      given++;
+    }
+    slapper.handCount = slapper.hand.length;
+    for (const p of players) {
+      if (p.id !== winner.playerId) p.handCount = p.hand.length;
+    }
+
+    const lastAction: HeartAttackLastAction = {
+      type: 'slap',
+      playerId: slapper.id,
+      playerName: slapper.name,
+      correct: false,
+    };
+
+    const message =
+      given > 0
+        ? `${slapper.name} 拍铃错误，向每位玩家各赔 1 张牌`
+        : `${slapper.name} 拍铃错误，但手牌已空`;
+
+    return checkGameEnd({
+      ...state,
+      players,
+      slapQueue: [],
+      stage: 'flipping',
+      lastAction,
+      message,
+    });
+  }
+
+  if (pile.length === 0) {
     return {
       ...state,
       slapQueue: [],
       stage: 'flipping',
       lastAction: {
         type: 'slap',
-        playerId: winnerPlayer.id,
-        playerName: winnerPlayer.name,
-        correct: false,
+        playerId: slapper.id,
+        playerName: slapper.name,
+        correct: true,
       },
-      message: '拍铃错误，但中央没有牌',
+      message: '拍铃正确，但中央没有牌',
     };
   }
 
-  const players = clonePlayers(state.players);
-  const recipient = players.find((p) => p.id === winner.playerId)!;
-  recipient.hand.push(...pile);
-  recipient.handCount = recipient.hand.length;
+  slapper.hand.push(...pile);
+  slapper.handCount = slapper.hand.length;
+  const slapperIdx = players.findIndex((p) => p.id === slapper.id);
 
   const lastAction: HeartAttackLastAction = {
     type: 'slap',
-    playerId: winnerPlayer.id,
-    playerName: winnerPlayer.name,
-    correct,
+    playerId: slapper.id,
+    playerName: slapper.name,
+    correct: true,
   };
 
-  const message = correct
-    ? `${winnerPlayer.name} 拍铃正确，收走 ${pile.length} 张牌`
-    : `${winnerPlayer.name} 拍铃错误，收走 ${pile.length} 张牌`;
-
-  return {
+  return checkGameEnd({
     ...state,
     players,
     centerPile: [],
     fruitTotals: emptyFruitTotals(),
     bellActive: false,
     stage: 'flipping',
+    currentPlayerIndex: slapperIdx,
     slapQueue: [],
     lastAction,
-    message,
-  };
+    message: `${slapper.name} 拍铃正确，收走 ${pile.length} 张牌`,
+  });
 }
 
 export function cardLabel(card: HeartAttackCard): string {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../lib/api';
 import { disconnectSocket, getSocket } from '../lib/socket';
@@ -9,6 +9,7 @@ const COMPACT_QUERY = '(max-width: 640px)';
 export function Layout() {
   const { user, token, logout, updateUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -31,8 +32,17 @@ export function Layout() {
 
   const expanded = !isCompact || headerOpen || editing;
 
+  useEffect(() => {
+    setHeaderOpen(false);
+    setEditing(false);
+  }, [location.pathname]);
+
   function closePanel() {
-    if (editing) return;
+    if (editing) {
+      setEditing(false);
+      setHeaderOpen(false);
+      return;
+    }
     setHeaderOpen(false);
   }
 
