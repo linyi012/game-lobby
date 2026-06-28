@@ -1,40 +1,31 @@
-import { getActiveSocket } from '../../lib/socket';
+import { emitWithAck } from '../../lib/emit-with-ack';
 import type { DrawStroke } from '@game-lobby/game-engine';
+import { getActiveSocket } from '../../lib/socket';
+
+type Ack = { ok: boolean };
 
 export function emitSelectWord(word: string) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:draw-guess:select-word', { word }, resolve);
-  });
+  return emitWithAck<Ack>('game:draw-guess:select-word', { word });
 }
 
 export function emitStroke(strokes: DrawStroke[]) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:draw-guess:stroke', { strokes }, resolve);
-  });
+  return emitWithAck<Ack>('game:draw-guess:stroke', { strokes });
 }
 
 export function emitClearCanvas() {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:draw-guess:clear', {}, resolve);
-  });
+  return emitWithAck<Ack>('game:draw-guess:clear', {});
 }
 
 export function emitGuess(text: string) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:draw-guess:guess', { text }, resolve);
-  });
+  return emitWithAck<Ack>('game:draw-guess:guess', { text });
 }
 
 export function emitPainterHint(text: string) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:draw-guess:hint', { text }, resolve);
-  });
+  return emitWithAck<Ack>('game:draw-guess:hint', { text });
 }
 
 export function emitRevealChar(index: number) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:draw-guess:reveal-char', { index }, resolve);
-  });
+  return emitWithAck<Ack>('game:draw-guess:reveal-char', { index });
 }
 
 export function onStrokeDelta(handler: (payload: { strokes: DrawStroke[] }) => void) {

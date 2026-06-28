@@ -7,6 +7,10 @@ import type { UserProfile } from '@game-lobby/shared';
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-change-me';
 
+if (process.env.NODE_ENV === 'production' && JWT_SECRET === 'dev-secret-change-me') {
+  throw new Error('JWT_SECRET must be set in production');
+}
+
 interface JwtPayload {
   sub: string;
   username: string;

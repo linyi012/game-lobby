@@ -18,7 +18,7 @@ import {
 } from '../lib/socket';
 import type { GameStartOptionsPayload } from '../lib/start-game-options';
 import { useRoomSession } from '../hooks/useRoomSession';
-import { GAME_REGISTRY, renderGameSettings } from '../games/registry';
+import { GAME_REGISTRY, renderGameSettings, GameComponentSuspense } from '../games/registry';
 
 export function RoomPage() {
   const { gameType: gameTypeParam, roomId } = useParams<{ gameType: string; roomId: string }>();
@@ -28,7 +28,7 @@ export function RoomPage() {
   const [botDifficulty, setBotDifficulty] = useState<AiDifficulty>('medium');
   const [startOptions, setStartOptions] = useState<Partial<GameStartOptionsPayload>>({});
 
-  const { room, error, setError, kicked, kickedMessage, closed, closedMessage, gameType, gameState } =
+  const { room, error, setError, kicked, kickedMessage, closed, closedMessage, gameType, gameState, resyncRoom, resyncing, socketJoined } =
     useRoomSession({ roomId, token, lobbyPath });
 
   useEffect(() => {
@@ -63,26 +63,37 @@ export function RoomPage() {
   const orphanedPlaying = room?.status === 'playing' && gameState == null;
   const showSidePanels = isPreGame || isIntermission || orphanedPlaying;
 
+  useEffect(() => {
+    if (!orphanedPlaying || !token || !roomId) return;
+    const timer = window.setTimeout(() => {
+      void resyncRoom();
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [orphanedPlaying, token, roomId, resyncRoom]);
+
   async function handleAddBot() {
-    const res = await emitAddBot(botDifficulty);
+    if (!roomId) return;
+    const res = await emitAddBot(botDifficulty, roomId);
     if (!res.ok) setError(res.message ?? '无法添加电脑');
   }
 
   async function handleRemoveMember(memberId: string, displayName: string, isBot: boolean) {
+    if (!roomId) return;
     if (!isBot && !window.confirm(`确定将 ${displayName} 移出房间吗？`)) return;
-    const res = await emitRemoveMember(memberId);
+    const res = await emitRemoveMember(memberId, roomId);
     if (!res.ok) setError(res.message ?? '无法移除成员');
   }
 
   async function handleStartGame() {
     if (!room) return;
-    const res = await emitStartGame(room.gameType, startOptions);
+    const res = await emitStartGame(room.gameType, startOptions, room.id);
     if (!res.ok) setError(res.message ?? '无法开始');
   }
 
   async function handleCloseRoom() {
+    if (!roomId) return;
     if (!window.confirm('确定要关闭房间吗？所有玩家将被移出房间。')) return;
-    const res = await closeRoom();
+    const res = await closeRoom(roomId);
     if (!res.ok) setError(res.message ?? '无法关闭房间');
   }
 
@@ -99,7 +110,7 @@ export function RoomPage() {
       spectators.add(memberId);
     }
 
-    await emitSetRoles([...active], [...spectators]);
+    await emitSetRoles([...active], [...spectators], room.id);
   }
 
   if (kicked) {
@@ -122,8 +133,6 @@ export function RoomPage() {
   const activeCount = room.players.filter((p) => p.role !== 'spectator').length;
   const needsRoleSplit =
     meta && (activeCount > meta.maxPlayers || activeCount < meta.minPlayers);
-
-  const GameComponent = activeGameMod?.Component;
 
   const playerListPanel = (
     <section className="card">
@@ -170,12 +179,13 @@ export function RoomPage() {
       </div>
 
       {isHost && !isPlaying && meta.botsAllowed && (
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <select
             className="input"
             style={{ width: 'auto' }}
             value={botDifficulty}
             onChange={(e) => setBotDifficulty(e.target.value as AiDifficulty)}
+            disabled={!socketJoined || resyncing}
           >
             {ALL_AI_DIFFICULTIES.map((d) => (
               <option key={d} value={d}>
@@ -183,8 +193,12 @@ export function RoomPage() {
               </option>
             ))}
           </select>
-          <button className="btn btn-secondary" onClick={handleAddBot}>
-            添加电脑
+          <button
+            className="btn btn-secondary"
+            onClick={handleAddBot}
+            disabled={!socketJoined || resyncing}
+          >
+            {resyncing ? '连接中…' : '添加电脑'}
           </button>
         </div>
       )}
@@ -237,8 +251,8 @@ export function RoomPage() {
   );
 
   return (
-    <div style={{ display: 'grid', gap: '1rem' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+    <div className="room-page">
+      <div className="room-page-header" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
         <Link to={lobbyPath} style={{ color: 'var(--text-muted)' }}>
           ← 返回 {meta.name} 大厅
         </Link>
@@ -256,28 +270,47 @@ export function RoomPage() {
 
       {error && <div style={{ color: 'var(--danger)' }}>{error}</div>}
 
-      {showSidePanels && (
+      {orphanedPlaying && (
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '1rem',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            alignItems: 'center',
+            padding: '0.75rem 1rem',
+            background: 'var(--surface-2)',
+            borderRadius: 8,
+            border: '1px solid var(--border)',
           }}
         >
+          <span style={{ color: 'var(--warning)', fontSize: '0.9rem' }}>
+            正在同步游戏状态…
+          </span>
+          <button className="btn btn-secondary" onClick={() => void resyncRoom()} disabled={resyncing}>
+            {resyncing ? '同步中…' : '重新同步'}
+          </button>
+        </div>
+      )}
+
+      {showSidePanels && (
+        <div className="room-page-side-panels">
           {playerListPanel}
           {settingsPanel}
         </div>
       )}
 
-      {GameComponent && gameState != null ? (
-        <GameComponent
+      {room && gameState != null ? (
+        <div className="room-page-game">
+          <GameComponentSuspense
+          gameType={room.gameType}
           state={gameState as import('@game-lobby/game-engine').GameState}
           myMemberId={myMember?.id ?? null}
           isSpectator={isSpectator}
           isHost={isHost}
           canStartNext={isIntermission}
           onStartNextGame={handleStartGame}
-        />
+          />
+        </div>
       ) : null}
     </div>
   );

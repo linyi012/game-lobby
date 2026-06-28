@@ -1,14 +1,11 @@
-import { getActiveSocket } from '../../lib/socket';
-import type { ChessPromotion } from '@game-lobby/game-engine';
+import { emitWithAck } from '../../lib/emit-with-ack';
 
-export function emitChessMove(from: string, to: string, promotion?: ChessPromotion) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:chess:move', { from, to, promotion }, resolve);
-  });
+type Ack = { ok: boolean };
+
+export function emitChessMove(from: string, to: string, promotion?: string) {
+  return emitWithAck<Ack>('game:chess:move', { from, to, promotion });
 }
 
 export function emitChessResign() {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:chess:resign', {}, resolve);
-  });
+  return emitWithAck<Ack>('game:chess:resign', {});
 }

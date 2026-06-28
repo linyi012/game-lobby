@@ -12,6 +12,7 @@ import { scriptMurderScriptsRouter } from './routes/script-murder-scripts.js';
 import { createAuthMiddleware } from './middleware/auth.js';
 import { setupSocketHandlers } from './socket/index.js';
 import { RoomManager } from './services/room-manager.js';
+import { stopGameTicker } from './services/game-ticker.js';
 import { startGuestUserSweeper } from './services/guest-user-service.js';
 import { startWordPackSyncScheduler } from './services/word-pack-service.js';
 import { startPairPackSyncScheduler } from './services/word-pair-service.js';
@@ -74,7 +75,7 @@ const io = new Server(httpServer, {
 });
 
 setupSocketHandlers(io, db, roomManager);
-roomManager.startSweeper();
+const stopRoomSweeper = roomManager.startSweeper();
 startGuestUserSweeper(db);
 startWordPackSyncScheduler(db);
 startPairPackSyncScheduler(db);
@@ -84,7 +85,14 @@ httpServer.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
 
-process.on('SIGTERM', async () => {
+async function shutdown() {
+  stopGameTicker();
+  stopRoomSweeper();
+  await new Promise<void>((resolve) => io.close(() => resolve()));
+  await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   await pool.end();
-  process.exit(0);
+}
+
+process.on('SIGTERM', () => {
+  void shutdown().finally(() => process.exit(0));
 });

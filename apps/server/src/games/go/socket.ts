@@ -9,6 +9,7 @@ import {
   tickGoGame,
   type GoGameState,
 } from '@game-lobby/game-engine';
+import { registerGameTick } from '../../services/game-ticker.js';
 
 const goPlaySchema = z.object({
   x: z.number().int().min(0).max(18),
@@ -108,7 +109,7 @@ export function registerGoSockets(socket: Socket, deps: GameSocketDeps) {
   });
 }
 
-let timerStarted = false;
+let timerRegistered = false;
 
 export function startGoTimer(
   io: Server,
@@ -116,10 +117,10 @@ export function startGoTimer(
   emitGameState: (roomId: string) => Promise<void>,
   emitRoomIfGameEnded: (roomId: string, state: unknown) => Promise<void>,
 ) {
-  if (timerStarted) return;
-  timerStarted = true;
+  if (timerRegistered) return;
+  timerRegistered = true;
 
-  setInterval(async () => {
+  registerGameTick(async () => {
     const now = Date.now();
     for (const [roomId, game] of roomManager.getActiveGameEntries()) {
       if (game.gameType !== 'go') continue;
@@ -134,5 +135,5 @@ export function startGoTimer(
       await emitGameState(roomId);
       await emitRoomIfGameEnded(roomId, game.state);
     }
-  }, 1000);
+  });
 }

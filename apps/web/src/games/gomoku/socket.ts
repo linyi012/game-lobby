@@ -1,7 +1,7 @@
-import { getActiveSocket } from '../../lib/socket';
+import { emitWithAck } from '../../lib/emit-with-ack';
+
+type Ack = { ok: boolean };
 
 export function emitGomokuPlace(row: number, col: number) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:gomoku:place', { row, col }, resolve);
-  });
+  return emitWithAck<Ack>('game:gomoku:place', { row, col });
 }

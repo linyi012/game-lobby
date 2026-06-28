@@ -9,13 +9,14 @@ import {
   type ActGuessGameState,
 } from '@game-lobby/game-engine';
 import type { RoomManager } from '../../services/room-manager.js';
+import { registerGameTick } from '../../services/game-ticker.js';
 import type { GameSocketDeps } from '../undercover/socket.js';
 
 const selectWordSchema = z.object({ word: z.string().min(1).max(32) });
 const guessSchema = z.object({ text: z.string().min(1).max(64) });
 const confirmCorrectSchema = z.object({ playerId: z.string().uuid() });
 
-let timerStarted = false;
+let timerRegistered = false;
 
 export function registerActGuessSockets(
   socket: Socket,
@@ -158,10 +159,10 @@ export function startActGuessTimer(
   emitGameState: (roomId: string) => Promise<void>,
   emitRoomIfGameEnded: (roomId: string, state: unknown) => Promise<void>,
 ) {
-  if (timerStarted) return;
-  timerStarted = true;
+  if (timerRegistered) return;
+  timerRegistered = true;
 
-  setInterval(async () => {
+  registerGameTick(async () => {
     const now = Date.now();
     for (const [roomId, game] of roomManager.getActiveGameEntries()) {
       if (game.gameType !== 'act_guess') continue;
@@ -176,5 +177,5 @@ export function startActGuessTimer(
       await emitGameState(roomId);
       await emitRoomIfGameEnded(roomId, game.state);
     }
-  }, 1000);
+  });
 }

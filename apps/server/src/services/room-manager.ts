@@ -1,4 +1,4 @@
-import { eq, asc, and } from 'drizzle-orm';
+import { eq, asc, and, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { rooms, roomMembers, type Database } from '@game-lobby/db';
 import type { AiDifficulty, GameType, RoomDetail, RoomPlayer, RoomSummary } from '@game-lobby/shared';
@@ -129,6 +129,14 @@ export class RoomManager {
     return run;
   }
 
+  withGameLock<T>(roomId: string, task: () => Promise<T>): Promise<T> {
+    return this.runExclusive(`game:${roomId}`, task);
+  }
+
+  getSocketRoomId(socketId: string): string | null {
+    return this.socketToMember.get(socketId)?.roomId ?? null;
+  }
+
   async listRooms(gameType?: GameType): Promise<RoomSummary[]> {
     const allRooms = gameType
       ? await this.db
@@ -137,13 +145,23 @@ export class RoomManager {
           .where(eq(rooms.gameType, gameType))
           .orderBy(asc(rooms.createdAt))
       : await this.db.select().from(rooms).orderBy(asc(rooms.createdAt));
-    const summaries: RoomSummary[] = [];
 
-    for (const room of allRooms) {
-      const members = await this.getMembers(room.id);
-      summaries.push(this.toSummary(room, members));
+    if (allRooms.length === 0) return [];
+
+    const roomIds = allRooms.map((room) => room.id);
+    const memberRows = await this.db
+      .select()
+      .from(roomMembers)
+      .where(inArray(roomMembers.roomId, roomIds));
+
+    const membersByRoom = new Map<string, RoomPlayer[]>();
+    for (const row of memberRows) {
+      const members = membersByRoom.get(row.roomId) ?? [];
+      members.push(this.mapMember(row));
+      membersByRoom.set(row.roomId, members);
     }
-    return summaries;
+
+    return allRooms.map((room) => this.toSummary(room, membersByRoom.get(room.id) ?? []));
   }
 
   async createRoom(input: {
@@ -264,13 +282,19 @@ export class RoomManager {
   async leaveRoom(socketId: string): Promise<{ roomId: string; deleted: boolean } | null> {
     const mapping = this.socketToMember.get(socketId);
     if (!mapping) return null;
+
+    const hasOtherSocket = [...this.socketToMember.entries()].some(
+      ([sid, map]) => sid !== socketId && map.memberId === mapping.memberId,
+    );
     this.socketToMember.delete(socketId);
 
     return this.runExclusive(`room:${mapping.roomId}`, async () => {
-      await this.db
-        .update(roomMembers)
-        .set({ isOnline: false })
-        .where(eq(roomMembers.id, mapping.memberId));
+      if (!hasOtherSocket) {
+        await this.db
+          .update(roomMembers)
+          .set({ isOnline: false })
+          .where(eq(roomMembers.id, mapping.memberId));
+      }
 
       this.touchRoom(mapping.roomId);
       const deleted = await this.cleanupRoom(mapping.roomId);

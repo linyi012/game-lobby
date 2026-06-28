@@ -1,14 +1,24 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { GameLobbyPage } from './pages/GameLobbyPage';
 import { RoomPage } from './pages/RoomPage';
-import { WordPackManagePage } from './games/draw-guess/WordPackManagePage';
-import { PairPackManagePage } from './games/undercover/PairPackManagePage';
-import { ScriptListPage } from './games/script-murder/ScriptListPage';
-import { ScriptEditorPage } from './games/script-murder/ScriptEditorPage';
 import { Layout } from './components/Layout';
+
+const WordPackManagePage = lazy(() =>
+  import('./games/draw-guess/WordPackManagePage').then((m) => ({ default: m.WordPackManagePage })),
+);
+const PairPackManagePage = lazy(() =>
+  import('./games/undercover/PairPackManagePage').then((m) => ({ default: m.PairPackManagePage })),
+);
+const ScriptListPage = lazy(() =>
+  import('./games/script-murder/ScriptListPage').then((m) => ({ default: m.ScriptListPage })),
+);
+const ScriptEditorPage = lazy(() =>
+  import('./games/script-murder/ScriptEditorPage').then((m) => ({ default: m.ScriptEditorPage })),
+);
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -30,10 +40,10 @@ export function App() {
       >
         <Route index element={<HomePage />} />
         <Route path="word-packs" element={<Navigate to="/games/draw_guess/word-packs" replace />} />
-        <Route path="games/:gameType/word-packs" element={<WordPackManagePage />} />
-        <Route path="games/undercover/word-pairs" element={<PairPackManagePage />} />
-        <Route path="games/script_murder/scripts" element={<ScriptListPage />} />
-        <Route path="games/script_murder/scripts/:id/edit" element={<ScriptEditorPage />} />
+        <Route path="games/:gameType/word-packs" element={<Suspense fallback={<p style={{ color: 'var(--text-muted)' }}>加载中…</p>}><WordPackManagePage /></Suspense>} />
+        <Route path="games/undercover/word-pairs" element={<Suspense fallback={<p style={{ color: 'var(--text-muted)' }}>加载中…</p>}><PairPackManagePage /></Suspense>} />
+        <Route path="games/script_murder/scripts" element={<Suspense fallback={<p style={{ color: 'var(--text-muted)' }}>加载中…</p>}><ScriptListPage /></Suspense>} />
+        <Route path="games/script_murder/scripts/:id/edit" element={<Suspense fallback={<p style={{ color: 'var(--text-muted)' }}>加载中…</p>}><ScriptEditorPage /></Suspense>} />
         <Route path="games/:gameType" element={<GameLobbyPage />} />
         <Route path="games/:gameType/room/:roomId" element={<RoomPage />} />
       </Route>

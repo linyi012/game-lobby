@@ -1,6 +1,18 @@
 import { io, type Socket } from 'socket.io-client';
 import type { GameType, RoomDetail, RoomSummary } from '@game-lobby/shared';
 import type { RolePresetId, WerewolfRole } from '@game-lobby/game-engine';
+import { bindSocketLifecycle, resetSocketLifecycle } from './socket-lifecycle';
+import { emitWithAck } from './emit-with-ack';
+
+export { emitWithAck } from './emit-with-ack';
+export {
+  getConnectionStatus,
+  onResync,
+  subscribeConnectionStatus,
+  type ConnectionStatus,
+} from './socket-lifecycle';
+
+const ACK_TIMEOUT_MS = 8000;
 
 /** Same-origin in dev (via Vite proxy) avoids localhost vs 127.0.0.1 CORS mismatches. */
 function resolveWsUrl(): string {
@@ -21,7 +33,10 @@ export function getSocket(token: string): Socket {
     socket = io(resolveWsUrl(), {
       auth: { token },
       autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
     });
+    bindSocketLifecycle(socket);
   } else {
     (socket.auth as { token: string }).token = token;
     if (!socket.connected) socket.connect();
@@ -32,6 +47,7 @@ export function getSocket(token: string): Socket {
 export function disconnectSocket() {
   socket?.disconnect();
   socket = null;
+  resetSocketLifecycle();
 }
 
 export function subscribeLobby(gameType: GameType, onRooms: (rooms: RoomSummary[]) => void) {
@@ -42,10 +58,14 @@ export function subscribeLobby(gameType: GameType, onRooms: (rooms: RoomSummary[
   return () => s.off('lobby:rooms', onRooms);
 }
 
-export function joinRoom(roomId: string): Promise<{ ok: boolean; room?: RoomDetail; message?: string }> {
-  return new Promise((resolve) => {
-    socket?.emit('room:join', { roomId }, resolve);
-  });
+export function emitLobbySubscribe(gameType: GameType) {
+  socket?.emit('lobby:subscribe', { gameType });
+}
+
+export function joinRoom(
+  roomId: string,
+): Promise<{ ok: boolean; room?: RoomDetail; message?: string }> {
+  return emitWithAck('room:join', { roomId }, ACK_TIMEOUT_MS);
 }
 
 export function onRoomUpdated(handler: (room: RoomDetail) => void) {
@@ -72,28 +92,32 @@ export function onRoomKicked(
   return () => socket?.off('room:kicked', handler);
 }
 
-export function closeRoom() {
-  return new Promise<{ ok: boolean; message?: string }>((resolve) => {
-    socket?.emit('room:close', {}, resolve);
-  });
+export function closeRoom(roomId: string) {
+  return emitWithAck<{ ok: boolean; message?: string }>('room:close', { roomId }, ACK_TIMEOUT_MS);
 }
 
-export function emitAddBot(difficulty: string) {
-  return new Promise<{ ok: boolean; room?: RoomDetail; message?: string }>((resolve) => {
-    socket?.emit('room:add-bot', { difficulty }, resolve);
-  });
+export function emitAddBot(difficulty: string, roomId: string) {
+  return emitWithAck<{ ok: boolean; room?: RoomDetail; message?: string }>(
+    'room:add-bot',
+    { difficulty, roomId },
+    ACK_TIMEOUT_MS,
+  );
 }
 
-export function emitRemoveMember(memberId: string) {
-  return new Promise<{ ok: boolean; room?: RoomDetail; message?: string }>((resolve) => {
-    socket?.emit('room:remove-member', { memberId }, resolve);
-  });
+export function emitRemoveMember(memberId: string, roomId: string) {
+  return emitWithAck<{ ok: boolean; room?: RoomDetail; message?: string }>(
+    'room:remove-member',
+    { memberId, roomId },
+    ACK_TIMEOUT_MS,
+  );
 }
 
-export function emitSetRoles(activePlayerIds: string[], spectatorIds: string[]) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    socket?.emit('room:set-roles', { activePlayerIds, spectatorIds }, resolve);
-  });
+export function emitSetRoles(activePlayerIds: string[], spectatorIds: string[], roomId: string) {
+  return emitWithAck<{ ok: boolean }>(
+    'room:set-roles',
+    { activePlayerIds, spectatorIds, roomId },
+    ACK_TIMEOUT_MS,
+  );
 }
 
 export function getActiveSocket(): Socket | null {
@@ -132,10 +156,10 @@ export function emitStartGame(
     enableMovingPig?: boolean;
     useLadyOfLake?: boolean;
   } = {},
+  roomId?: string,
 ) {
-  return new Promise<{ ok: boolean; message?: string }>((resolve) => {
-    let payload: Record<string, unknown> = {};
-    if (gameType === 'da_vinci_code') {
+  let payload: Record<string, unknown> = {};
+  if (gameType === 'da_vinci_code') {
       payload = {
         useJoker: options.useJoker ?? false,
         assistMode: options.assistMode ?? true,
@@ -220,8 +244,10 @@ export function emitStartGame(
         useLadyOfLake: options.useLadyOfLake ?? true,
       };
     }
-    socket?.emit('game:start', payload, resolve);
-  });
+  if (roomId) {
+    payload.roomId = roomId;
+  }
+  return emitWithAck<{ ok: boolean; message?: string }>('game:start', payload, ACK_TIMEOUT_MS);
 }
 
 export function leaveRoom() {

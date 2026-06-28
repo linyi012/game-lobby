@@ -1,17 +1,17 @@
-import { getActiveSocket } from '../../lib/socket';
+import { emitWithAck } from '../../lib/emit-with-ack';
 
 export function emitUndercoverSpeech(text: string) {
-  getActiveSocket()?.emit('game:undercover:speech', { text });
+  return emitWithAck<{ ok: boolean }>('game:undercover:speech', { text });
 }
 
 export function emitUndercoverEndSpeaking() {
-  getActiveSocket()?.emit('game:undercover:end-speaking', {});
+  return emitWithAck<{ ok: boolean }>('game:undercover:end-speaking', {});
 }
 
 export function emitUndercoverVote(targetId: string) {
-  getActiveSocket()?.emit('game:undercover:vote', { targetId });
+  return emitWithAck<{ ok: boolean }>('game:undercover:vote', { targetId });
 }
 
 export function emitUndercoverContinueReveal() {
-  getActiveSocket()?.emit('game:undercover:continue-reveal', {});
+  return emitWithAck<{ ok: boolean }>('game:undercover:continue-reveal', {});
 }

@@ -1,19 +1,15 @@
-import { getActiveSocket } from '../../lib/socket';
+import { emitWithAck } from '../../lib/emit-with-ack';
 
-export function emitGoPlay(x: number, y: number): Promise<{ ok: boolean }> {
-  return new Promise((resolve) => {
-    getActiveSocket()?.emit('game:go:play', { x, y }, resolve);
-  });
+type Ack = { ok: boolean };
+
+export function emitGoPlay(x: number, y: number) {
+  return emitWithAck<Ack>('game:go:play', { x, y });
 }
 
-export function emitGoPass(): Promise<{ ok: boolean }> {
-  return new Promise((resolve) => {
-    getActiveSocket()?.emit('game:go:pass', {}, resolve);
-  });
+export function emitGoPass() {
+  return emitWithAck<Ack>('game:go:pass', {});
 }
 
-export function emitGoResign(): Promise<{ ok: boolean }> {
-  return new Promise((resolve) => {
-    getActiveSocket()?.emit('game:go:resign', {}, resolve);
-  });
+export function emitGoResign() {
+  return emitWithAck<Ack>('game:go:resign', {});
 }

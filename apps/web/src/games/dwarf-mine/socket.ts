@@ -1,9 +1,9 @@
-import { getActiveSocket } from '../../lib/socket';
+import { emitWithAck } from '../../lib/emit-with-ack';
 
-function emit(event: string, payload?: unknown): Promise<{ ok: boolean; message?: string }> {
-  return new Promise((resolve) => {
-    getActiveSocket()?.emit(event, payload, (res: { ok: boolean; message?: string }) => resolve(res ?? { ok: false }));
-  });
+type Ack = { ok: boolean; message?: string };
+
+function emit(event: string, payload?: unknown): Promise<Ack> {
+  return emitWithAck<Ack>(event, payload ?? {});
 }
 
 export function emitPlayPath(
@@ -28,7 +28,7 @@ export function emitDiscard(cardId: string) {
   return emit('game:dwarf_mine:discard', { cardId });
 }
 
-export function emitDiscardTwo(cardId1: string, cardId2: string, faceUpCardId?: string) {
+export function emitDiscardTwo(cardId1: string, cardId2: string, faceUpCardId: string) {
   return emit('game:dwarf_mine:discard_two', { cardId1, cardId2, faceUpCardId });
 }
 

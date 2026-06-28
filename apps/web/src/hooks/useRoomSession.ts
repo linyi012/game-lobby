@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GameType, RoomDetail } from '@game-lobby/shared';
 import * as api from '../lib/api';
@@ -7,6 +7,7 @@ import {
   joinRoom,
   leaveRoom,
   onGameState,
+  onResync,
   onRoomClosed,
   onRoomKicked,
   onRoomUpdated,
@@ -28,6 +29,9 @@ export interface UseRoomSessionResult {
   closedMessage: string;
   gameType: GameType | null;
   gameState: unknown;
+  resyncRoom: () => Promise<void>;
+  resyncing: boolean;
+  socketJoined: boolean;
 }
 
 export function useRoomSession({
@@ -44,21 +48,46 @@ export function useRoomSession({
   const [gameType, setGameType] = useState<GameType | null>(null);
   const [gameState, setGameState] = useState<unknown>(null);
   const [error, setError] = useState('');
+  const [resyncing, setResyncing] = useState(false);
+  const [socketJoined, setSocketJoined] = useState(false);
+
+  const resyncRoom = useCallback(async () => {
+    if (!token || !roomId) return;
+    setResyncing(true);
+    try {
+      getSocket(token);
+      const res = await joinRoom(roomId);
+      if (res.ok && res.room) {
+        setRoom(res.room);
+        setSocketJoined(true);
+        setError('');
+      } else {
+        setSocketJoined(false);
+        if (res.message) {
+          setError(res.message);
+        }
+      }
+    } catch (err) {
+      setSocketJoined(false);
+      setError(err instanceof Error ? err.message : '同步房间失败');
+      try {
+        const detail = await api.fetchRoom(token, roomId);
+        setRoom((prev) => prev ?? detail);
+      } catch {
+        // ignore REST fallback failure
+      }
+    } finally {
+      setResyncing(false);
+    }
+  }, [token, roomId]);
 
   useEffect(() => {
     if (!token || !roomId) return;
+    setSocketJoined(false);
     getSocket(token);
 
     let mounted = true;
-    (async () => {
-      const res = await joinRoom(roomId);
-      if (!mounted) return;
-      if (!res.ok) {
-        setError(res.message ?? '加入房间失败');
-        return;
-      }
-      if (res.room) setRoom(res.room);
-    })();
+    void resyncRoom();
 
     const unsubRoom = onRoomUpdated((r) => {
       if (r.id === roomId) setRoom(r);
@@ -85,6 +114,9 @@ export function useRoomSession({
         navigate(lobbyPath, { replace: true, state: { notice: message } });
       }
     });
+    const unsubResync = onResync(() => {
+      if (mounted) void resyncRoom();
+    });
 
     return () => {
       mounted = false;
@@ -93,8 +125,9 @@ export function useRoomSession({
       unsubGame();
       unsubClosed();
       unsubKicked();
+      unsubResync();
     };
-  }, [token, roomId, lobbyPath, navigate]);
+  }, [token, roomId, lobbyPath, navigate, resyncRoom]);
 
   useEffect(() => {
     if (!token || !roomId) return;
@@ -104,5 +137,18 @@ export function useRoomSession({
       .catch(() => {});
   }, [token, roomId]);
 
-  return { room, error, setError, kicked, kickedMessage, closed, closedMessage, gameType, gameState };
+  return {
+    room,
+    error,
+    setError,
+    kicked,
+    kickedMessage,
+    closed,
+    closedMessage,
+    gameType,
+    gameState,
+    resyncRoom,
+    resyncing,
+    socketJoined,
+  };
 }

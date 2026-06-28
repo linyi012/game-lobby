@@ -1,25 +1,19 @@
-import { getActiveSocket } from '../../lib/socket';
+import { emitWithAck } from '../../lib/emit-with-ack';
+
+type Ack = { ok: boolean };
 
 export function emitSelectWord(word: string) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:act-guess:select-word', { word }, resolve);
-  });
+  return emitWithAck<Ack>('game:act-guess:select-word', { word });
 }
 
 export function emitGuess(text: string) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:act-guess:guess', { text }, resolve);
-  });
+  return emitWithAck<Ack>('game:act-guess:guess', { text });
 }
 
 export function emitPass() {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:act-guess:pass', {}, resolve);
-  });
+  return emitWithAck<Ack>('game:act-guess:pass', {});
 }
 
 export function emitConfirmCorrect(playerId: string) {
-  return new Promise<{ ok: boolean }>((resolve) => {
-    getActiveSocket()?.emit('game:act-guess:confirm-correct', { playerId }, resolve);
-  });
+  return emitWithAck<Ack>('game:act-guess:confirm-correct', { playerId });
 }

@@ -1,19 +1,20 @@
-import { getActiveSocket } from '../../lib/socket';
+import { emitWithAck } from '../../lib/emit-with-ack';
+import type { DaVinciColor } from '@game-lobby/game-engine';
 
 export function emitDaVinciGuess(targetPlayerId: string, tileIndex: number, value: number) {
-  getActiveSocket()?.emit('game:davinci:guess', { targetPlayerId, tileIndex, value });
+  return emitWithAck<{ ok: boolean }>('game:davinci:guess', { targetPlayerId, tileIndex, value });
 }
 
 export function emitDaVinciDecision(shouldContinue: boolean) {
-  getActiveSocket()?.emit('game:davinci:decision', { continue: shouldContinue });
+  return emitWithAck<{ ok: boolean }>('game:davinci:decision', { continue: shouldContinue });
 }
 
 export function emitDaVinciPlace(index: number) {
-  getActiveSocket()?.emit('game:davinci:place', { index });
+  return emitWithAck<{ ok: boolean }>('game:davinci:place', { index });
 }
 
 export function emitDaVinciSetup(
-  tiles: { color: 'black' | 'white'; value: number; isJoker: boolean }[],
+  tiles: { color: DaVinciColor; value: number; isJoker: boolean }[],
 ) {
-  getActiveSocket()?.emit('game:davinci:setup', { tiles });
+  return emitWithAck<{ ok: boolean }>('game:davinci:setup', { tiles });
 }

@@ -10,13 +10,14 @@ import {
   type ShopItemType,
 } from '@game-lobby/game-engine';
 import type { RoomManager } from '../../services/room-manager.js';
+import { registerGameTick } from '../../services/game-ticker.js';
 import type { GameSocketDeps } from '../undercover/socket.js';
 
 const shopBuySchema = z.object({
   item: z.enum(['dynamite', 'strength', 'lucky']),
 });
 
-let timerStarted = false;
+let timerRegistered = false;
 
 export function registerGoldMinerSockets(
   socket: Socket,
@@ -125,10 +126,10 @@ export function startGoldMinerTimer(
   emitRoomIfGameEnded: (roomId: string, state: unknown) => Promise<void>,
   processBots: (roomId: string) => Promise<void>,
 ) {
-  if (timerStarted) return;
-  timerStarted = true;
+  if (timerRegistered) return;
+  timerRegistered = true;
 
-  setInterval(async () => {
+  registerGameTick(async () => {
     const now = Date.now();
     for (const [roomId, game] of roomManager.getActiveGameEntries()) {
       if (game.gameType !== 'gold_miner') continue;

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ALL_FRUITS,
   FRUIT_EMOJI,
@@ -12,8 +12,8 @@ import {
   isMusicEnabled,
   isSfxEnabled,
   playBombSound,
+  playBellRing,
   playFlipSound,
-  playSlapCorrect,
   playSlapWrong,
   playTurnSound,
   playVictorySound,
@@ -27,6 +27,8 @@ import {
 const HeartAttackBoard3D = lazy(() =>
   import('./HeartAttackBoard3D').then((m) => ({ default: m.HeartAttackBoard3D })),
 );
+
+type SlapAnim = import('./HeartAttackBoard3D').SlapAnimation;
 
 interface Props {
   state: HeartAttackGameState;
@@ -71,6 +73,40 @@ export function HeartAttackGame({
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const lastSigRef = useRef<string | null>(null);
   const histIdRef = useRef(0);
+  const [slapAnimations, setSlapAnimations] = useState<SlapAnim[]>([]);
+  const [bellSlapPulse, setBellSlapPulse] = useState(0);
+  const slapAnimIdRef = useRef(0);
+  const seenSlapKeysRef = useRef<Set<string>>(new Set());
+  const slapAnimsRef = useRef<SlapAnim[]>([]);
+  const localSlapPendingRef = useRef(false);
+  const slapEventSeqRef = useRef(0);
+
+  const registerSlapAnimation = useCallback((playerId: string, key: string) => {
+    if (seenSlapKeysRef.current.has(key)) return false;
+    seenSlapKeysRef.current.add(key);
+    const id = `slap-${slapAnimIdRef.current++}`;
+    const overlapIndex = slapAnimsRef.current.length;
+    const anim: SlapAnim = { id, playerId, startTime: Date.now(), overlapIndex };
+    slapAnimsRef.current = [...slapAnimsRef.current, anim];
+    setSlapAnimations(slapAnimsRef.current);
+    setBellSlapPulse((p) => p + 1);
+    window.setTimeout(() => {
+      slapAnimsRef.current = slapAnimsRef.current.filter((a) => a.id !== id);
+      setSlapAnimations(slapAnimsRef.current);
+      seenSlapKeysRef.current.delete(key);
+    }, 720);
+    return true;
+  }, []);
+
+  const handleSlap = useCallback(() => {
+    unlockAudio();
+    if (myMemberId) {
+      localSlapPendingRef.current = true;
+      registerSlapAnimation(myMemberId, `local-${Date.now()}-${myMemberId}`);
+      playBellRing();
+    }
+    onSlap();
+  }, [myMemberId, onSlap, registerSlapAnimation]);
 
   useEffect(() => {
     const la = state.lastAction;
@@ -106,16 +142,34 @@ export function HeartAttackGame({
   useEffect(() => {
     const la = state.lastAction;
     if (!la || state.phase !== 'playing') return;
-    const sig = `${la.type}|${la.playerId}|${la.correct}`;
+    const slapSeq = la.type === 'slap' ? ++slapEventSeqRef.current : 0;
+    const sig =
+      la.type === 'slap'
+        ? `${la.type}|${la.playerId}|${la.correct}|${slapSeq}`
+        : `${la.type}|${la.playerId}|${la.correct}`;
     if (sig === actionSigRef.current) return;
     actionSigRef.current = sig;
     if (la.type === 'flip') playFlipSound();
     else if (la.type === 'bomb') playBombSound();
     else if (la.type === 'slap') {
-      if (la.correct) playSlapCorrect();
-      else playSlapWrong();
+      const isLocalEcho = la.playerId === myMemberId && localSlapPendingRef.current;
+      localSlapPendingRef.current = false;
+      if (!isLocalEcho) {
+        registerSlapAnimation(la.playerId, `action-${sig}`);
+        playBellRing();
+      }
+      if (!la.correct) setTimeout(() => playSlapWrong(), isLocalEcho ? 0 : 90);
     }
-  }, [state.lastAction, state.phase]);
+  }, [state.lastAction, state.phase, myMemberId, registerSlapAnimation]);
+
+  useEffect(() => {
+    if (state.stage !== 'resolving_slap' || state.slapQueue.length === 0) return;
+    let anyNew = false;
+    for (const { playerId, at } of state.slapQueue) {
+      if (registerSlapAnimation(playerId, `queue-${at}-${playerId}`)) anyNew = true;
+    }
+    if (anyNew) playBellRing();
+  }, [state.slapQueue, state.stage, registerSlapAnimation]);
 
   const prevTurnRef = useRef(state.currentPlayerIndex);
   useEffect(() => {
@@ -135,11 +189,11 @@ export function HeartAttackGame({
       if (state.stage === 'choosing_fruit') return;
       e.preventDefault();
       unlockAudio();
-      onSlap();
+      handleSlap();
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isSpectator, state.phase, state.stage, onSlap]);
+  }, [isSpectator, state.phase, state.stage, handleSlap]);
 
   const ended = state.phase === 'ended';
   const winner =
@@ -174,7 +228,13 @@ export function HeartAttackGame({
           </div>
         }
       >
-        <HeartAttackBoard3D state={state} myMemberId={myMemberId} bellActive={state.bellActive} />
+        <HeartAttackBoard3D
+          state={state}
+          myMemberId={myMemberId}
+          bellActive={state.bellActive}
+          slapAnimations={slapAnimations}
+          bellSlapPulse={bellSlapPulse}
+        />
       </Suspense>
 
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2 }}>
@@ -367,7 +427,7 @@ export function HeartAttackGame({
             {!isSpectator && state.phase === 'playing' && !needWild && (
               <button
                 type="button"
-                onClick={onSlap}
+                onClick={handleSlap}
                 style={{
                   width: 120,
                   height: 120,
